@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "description": "存量系统清单的规范字段、别名映射、必填规则与异常处理口径。合成演示数据。",
+  "primaryKey": ["system_id"],
+  "canonicalSchema": {
+    "system_id": { "type": "string", "required": true, "description": "系统唯一标识，清洗后主键" },
+    "name": { "type": "string", "required": true, "description": "系统名称" },
+    "owner_dept": { "type": "string", "required": false, "description": "归属部门" },
+    "status": {
+      "type": "string",
+      "required": true,
+      "enum": ["active", "legacy", "planned", "retired"],
+      "description": "生命周期状态"
+    },
+    "data_volume_gb": { "type": "number", "required": false, "description": "数据量（GB）" },
+    "latency_ms": { "type": "number", "required": false, "description": "平均响应延迟（毫秒）" },
+    "protocol": { "type": "string", "required": false, "description": "主要接入协议" },
+    "notes": { "type": "string", "required": false, "description": "备注" }
+  },
+  "aliases": {
+    "system_id": ["sys_id", "system", "系统ID"],
+    "owner_dept": ["owner", "department", "归属部门"],
+    "protocol": ["protocol_type", "proto", "接入协议"]
+  },
+  "outputColumns": [
+    "system_id",
+    "name",
+    "owner_dept",
+    "status",
+    "data_volume_gb",
+    "latency_ms",
+    "protocol",
+    "notes"
+  ],
+  "enumNormalization": {
+    "active": ["active", "running", "启用"],
+    "legacy": ["legacy", "维护模式"],
+    "planned": ["planned", "planning", "待上线"],
+    "retired": ["retired", "已下线"]
+  },
+  "anomalyHandling": {
+    "unknownEnum": "按 normalize+map 口径处理；无法映射的值记录 issue 并保留原值，不静默改写成合法枚举",
+    "missingRequired": "该行记录 issue，保留在原始输入中；输出清洗表不丢弃原始输入，但有效记录统计不含缺失必填行",
+    "duplicatePrimaryKey": "按 keep=last 去重，并记录被覆盖行的原始行号",
+    "whitespaceAndCase": "主键与名称做 trim；枚举做 trim + lower 后再映射"
+  },
+  "transformPlan": [
+    { "op": "rename", "note": "sys_id->system_id, owner->owner_dept, protocol_type->protocol" },
+    { "op": "normalize", "note": "对 system_id/name/status 做 trim；status 额外 lower" },
+    { "op": "dedupe", "note": "按 system_id 去重 keep=last" },
+    { "op": "require", "note": "system_id 与 name 非空" }
+  ],
+  "notes": "测试以源数据真实统计结果为准，不得为了演示输出在生产逻辑中写死数量。"
+}

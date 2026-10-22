@@ -1,0 +1,4 @@
+record_code,name,owner,status,data_volume_gb,latency_ms,protocol_type,notes
+X-3001,合同管理系统,法务部,active,120,140,REST,缺少主键字段列
+X-3002,档案管理系统,行政部,legacy,80,180,SOAP,
+X-3003,采购寻源系统,采购部,Active,60,160,REST,

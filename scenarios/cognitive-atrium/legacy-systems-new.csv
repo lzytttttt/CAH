@@ -1,0 +1,9 @@
+sys_id,name,owner,status,data_volume_gb,latency_ms,protocol_type,notes
+N-2001,合并报表平台,财务部, Active ,640,88,REST,新数据：大小写与空格不规范
+N-2002,预算管理系统,财务部,legacy,210,130,SOAP,
+N-2003,费控管理系统,财务部,Legacy,180,150,SOAP,
+N-2003,费控管理系统（新）,财务部,active,160,140,REST,新数据：重复主键保留后出现
+N-2004,税务管理系统,财务部,planned,95,170,REST,
+N-2005,资金管理系统,财务部,retired,320,190,SOAP,
+N-2006,应收管理系统,财务部,active,140,120,REST,
+N-2007,应付管理系统,财务部,active,130,115,REST,

@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "project": "次世代智能工作空间产品架构与 GTM 策略中枢",
+  "synthetic": true,
+  "syntheticNote": "本文件为合成演示数据，用于演示约束冲突识别，不代表任何真实客户或真实市场结论。",
+  "deploymentModes": ["offline_private", "online_saas"],
+  "constraints": [
+    {
+      "id": "DEPLOY-1",
+      "category": "deployment",
+      "kind": "hard",
+      "statement": "首版必须支持完全离线私有化部署：业务数据与模型推理都不离开客户内网。",
+      "source": "product-brief.md#4-部署范围"
+    },
+    {
+      "id": "AI-1",
+      "category": "model",
+      "kind": "hard",
+      "statement": "核心交互必须依赖云端实时大模型服务完成流式生成与工具调用。",
+      "source": "product-brief.md#3-核心使用场景"
+    },
+    {
+      "id": "PRIVACY-1",
+      "category": "privacy",
+      "kind": "hard",
+      "statement": "用户的原始资料与 API 凭据不得上传到未批准的外部服务，导出包默认排除凭据与私人配置。",
+      "source": "product-brief.md#2-目标用户"
+    },
+    {
+      "id": "LATENCY-1",
+      "category": "latency",
+      "kind": "preference",
+      "statement": "交互反馈目标：点击至本地可见反馈 p95 < 100ms；首字延迟按实际服务测量并如实报告。",
+      "source": "product-brief.md#6-验收标准"
+    },
+    {
+      "id": "FORMAT-1",
+      "category": "output",
+      "kind": "hard",
+      "statement": "交付物必须同时可导出为 Markdown 与 JSON；表格类模块可导出 CSV。",
+      "source": "product-brief.md#6-验收标准"
+    },
+    {
+      "id": "SCOPE-1",
+      "category": "scope",
+      "kind": "hard",
+      "statement": "首版不提供任意 shell、任意代码执行、外部系统写入与公网多租户能力。",
+      "source": "product-brief.md#5-边界"
+    },
+    {
+      "id": "AUDIT-1",
+      "category": "audit",
+      "kind": "hard",
+      "statement": "每个改变交付物的动作必须产生可回放事件，模型输出、工具结果、校验结果、用户接受与正式提交必须区分记录。",
+      "source": "product-brief.md#6-验收标准"
+    },
+    {
+      "id": "OFFLINE-2",
+      "category": "deployment",
+      "kind": "preference",
+      "statement": "离线环境中仍应能查看既有成果与运行记录（只读能力不依赖网络）。",
+      "source": "product-brief.md#4-部署范围"
+    }
+  ],
+  "conflictSets": [
+    {
+      "id": "CONFLICT-MODEL-DEPLOYMENT",
+      "constraintIds": ["DEPLOY-1", "AI-1"],
+      "type": "hard_hard",
+      "description": "完全离线私有化部署与依赖云端实时大模型服务无法同时在首版中作为硬约束成立。",
+      "possibleResolutions": [
+        "允许私有化部署中接入本地模型服务，并把云端模型改为可选增强",
+        "明确首版仅支持混合部署，离线能力降级为只读与确定性配方",
+        "拆分两个交付版本：离线版与云端版分别验收"
+      ]
+    }
+  ],
+  "latencyBudget": {
+    "clickLocalFeedbackP95Ms": 100,
+    "localCommandAckP95Ms": 300,
+    "spatialAnimationFpsTarget": 60,
+    "notes": "LLM 首字延迟、总生成时间、token 与成本按实际服务测量并报告，不设伪造的统一秒级 SLA。"
+  },
+  "privacy": {
+    "credentials": "后端环境变量或受限密钥文件读取，浏览器仅看到掩码状态",
+    "logs": "日志、导出包、配方与 prompt 不得包含 API key",
+    "crossTaskMemory": "默认不跨任务检索历史内容"
+  },
+  "outputFormats": ["markdown", "json", "csv"],
+  "notes": "测试与演示必须读取本文件的真实结构，不得在生产逻辑中写死冲突数量。"
+}

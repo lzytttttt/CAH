@@ -1,0 +1,63 @@
+{
+  "id": "cognitive-atrium",
+  "name": "次世代智能工作空间产品架构与 GTM 策略中枢",
+  "description": "内置四模块模板：架构拓扑、交互规范、存量系统清洗、商业化价值矩阵。合成演示数据。",
+  "modules": [
+    {
+      "key": "core-architecture",
+      "title": "核心架构拓扑",
+      "kind": "json",
+      "order": 0,
+      "dependsOnKeys": [],
+      "intentHint": "根据 product-brief.md 与 constraints.json 形成组件拓扑、部署模式与决策记录；每个关键约束都要给出处理结果。",
+      "acceptanceCriteria": [
+        { "text": "组件 ID 唯一，依赖关系无环", "layer": "L1" },
+        { "text": "部署模式明确（离线/混合），并说明与约束的关系", "layer": "L3" },
+        { "text": "constraints.json 中每条硬约束都有处理结果或明确冲突", "layer": "L3" },
+        { "text": "关键事实引用资料证据或标记为待验证假设", "layer": "L2" }
+      ]
+    },
+    {
+      "key": "interaction-spec",
+      "title": "多模态交互引擎规范",
+      "kind": "markdown",
+      "order": 1,
+      "dependsOnKeys": ["core-architecture"],
+      "intentHint": "基于架构结果与 stakeholder-notes.md，形成交互状态与事件表、错误处理表；明确输入模态边界、取消与重试。",
+      "acceptanceCriteria": [
+        { "text": "明确首版支持的输入模态边界，未实现能力标记为不支持", "layer": "L3" },
+        { "text": "包含状态与事件表，覆盖取消、重试、异常反馈", "layer": "L1" },
+        { "text": "明确 API 责任边界，不把前端文案当作执行状态", "layer": "L3" },
+        { "text": "需求项引用 stakeholder-notes.md 的可定位证据", "layer": "L2" }
+      ]
+    },
+    {
+      "key": "legacy-cleanup",
+      "title": "存量系统兼容层清洗",
+      "kind": "csv",
+      "order": 2,
+      "dependsOnKeys": [],
+      "intentHint": "按 field-mapping.json 对 legacy-systems.csv 做确定性清洗：别名重命名、枚举规范化、主键去重、必填校验，并记录问题与行号。",
+      "acceptanceCriteria": [
+        { "text": "记录数可核对：输入 24 行，输出行数与去重规则一致", "layer": "L3" },
+        { "text": "必填字段符合规则，缺失行记录在 issues", "layer": "L3" },
+        { "text": "主键规则满足（唯一、无重复组）", "layer": "L1" },
+        { "text": "原始输入不被覆盖，输出为新对象", "layer": "L1" }
+      ]
+    },
+    {
+      "key": "value-matrix",
+      "title": "商业化价值壁垒矩阵",
+      "kind": "csv",
+      "order": 3,
+      "dependsOnKeys": ["core-architecture", "legacy-cleanup"],
+      "intentHint": "基于已接受的核心架构与清洗成果（可选绑定角色需求）生成价值矩阵：每行含用户问题、能力、价值假设、证据、依赖与待验证指标。",
+      "acceptanceCriteria": [
+        { "text": "每行包含用户问题、能力、价值假设、证据、依赖与待验证指标", "layer": "L1" },
+        { "text": "价值陈述标记为待验证假设，不编造市场规模或营收", "layer": "L3" },
+        { "text": "证据指向已接受上游成果或资料片段", "layer": "L2" },
+        { "text": "只使用已接受的上游版本，不用未接受草稿", "layer": "L1" }
+      ]
+    }
+  ]
+}

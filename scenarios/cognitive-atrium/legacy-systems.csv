@@ -1,0 +1,25 @@
+sys_id,name,owner,status,data_volume_gb,latency_ms,protocol_type,notes
+S-1001,ERP 财务核心,财务部,active,1200,85,SOAP,主账套
+S-1002,CRM 客户关系,销售部,Active,860,120,REST,含客户主数据
+S-1003,MES 制造执行,生产部,legacy,430,210,OPC-UA,车间现场系统
+S-1004,WMS 仓储管理,供应链部,decommissioned,150,190,REST,已计划下线
+S-1005,HR 人事系统,人力资源部,active,210,95,REST,含薪酬字段
+S-1006,PLM 产品生命周期,研发部,planned,320,140,REST,待立项
+S-1007,QMS 质量管理,质量部,legacy,180,260,SOAP,旧版接口
+S-1007,QMS 质量管理,质量部,legacy,190,250,SOAP,重复登记
+S-1008,SRM 供应商,采购部,active,240,110,REST,
+S-1009,BI 报表平台,数据部,legacy,780,310,ODBC,依赖数仓
+S-1010,主数据 MDM,数据部,planned,150,180,REST,
+S-1011,OMS 订单,销售部,active,340,90,REST,
+S-1012,TMS 运输,物流部,unknown,220,230,REST,状态未知
+S-1013,EAM 设备资产,设备部,legacy,260,220,SOAP,
+S-1014,客服工单,客服部,active,130,100,REST,
+S-1015,数据仓库,数据部,active,5400,400,JDBC,核心数仓
+S-1001,ERP 财务（旧实例）,财务部,retired,1100,95,SOAP,重复主键的旧实例
+S-1016,门户网站,市场部, Active ,90,75,REST,大小写与空格不规范
+S-1017,邮件系统,IT 运维部,active,460,65,SMTP,
+S-1018,权限中心,安全部,planned,40,50,REST,
+S-1019,监控平台,IT 运维部,active,320,55,REST,
+S-1020,备份系统,IT 运维部,legacy,2100,600,NFS,
+S-1021,,运营部,active,60,130,REST,缺少必填名称
+S-1022,报表工具(临时),数据部,planned,30,200,REST,临时规划系统
