@@ -109,7 +109,8 @@ pnpm dev            # 开发：server + web
 pnpm build          # 生产构建
 pnpm start          # 启动生产构建
 pnpm typecheck      # 全仓 TypeScript strict 检查
-pnpm test           # 单元 / 契约 / 集成测试
+pnpm test           # 单元 / 契约 / 集成测试（vitest）
+pnpm test:e2e:browser  # 浏览器级 E2E（Playwright，需先: pnpm exec playwright install chromium）
 pnpm seed:demo      # 重建 Demo 数据
 pnpm cli -- --help  # CLI
 ```
@@ -143,3 +144,7 @@ pnpm cli -- --help  # CLI
 ## 8. 许可
 
 MIT，见 [LICENSE](LICENSE)。第三方依赖许可清单见 `docs/third-party-licenses.md`。
+
+## 9. 验收截图
+
+`docs/screenshots/` 保存 headless Chromium 对生产构建的截图（1440×900、1366×768、1920×1080、390×844、修复卡、差异审阅）。截图仅作补充证据，验收结论以 `docs/acceptance-report.md` 中可复现命令与测试结果为准。

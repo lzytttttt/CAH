@@ -12,8 +12,9 @@ P0 已按设计文档实现为可运行的本地 harness（空间 Web 工作台 
 | - | - |
 | `pnpm typecheck` | 0 错误 |
 | `pnpm test` | 69 files / 706 tests 全部通过 |
+| `pnpm test:e2e:browser` | Playwright/Chromium 35/35 通过（五区、Demo 夹具、修复卡/审阅面板、键盘切层与 Tab 遍历、多视口、减少动效、零控制台错误；截图见 `docs/screenshots/`） |
 | `pnpm build` | web + server + cli 成功 |
-| `pnpm exec tsx scripts/bench.ts` | 1000 行确定性清洗 5.4ms；5000 事件快照恢复 33.9ms（目标均 <2000ms） |
+| `pnpm exec tsx scripts/bench.ts` | 1000 行确定性清洗 5.4ms；5000 事件快照恢复 33.9ms（目标均 <2000ms）；浏览器内键盘切层 p95 ≈3.3ms |
 | 生产冒烟 | 构建产物启动、会话/工作区/Demo 切换、Demo 夹具快照（57 events、10 节点）、前端静态托管、CLI 对同一服务读写一致 |
 | 详细矩阵 | 见 `docs/acceptance-report.md` |
 
@@ -46,7 +47,7 @@ P0 已按设计文档实现为可运行的本地 harness（空间 Web 工作台 
 ## 已知缺口（如实声明）
 
 1. **真实供应商 Live 实测未完成**（环境无凭据）。证据为本地 OpenAI 兼容假服务上的真实适配器路径。
-2. **浏览器级自动化/无障碍/性能测量未执行**（无 Playwright/jsdom 环境）；以 DOM-free 逻辑测试 + SSR 冒烟 + 人工代码审查替代。
+2. **浏览器级 E2E 已执行**（Playwright/Chromium，35 checks）；但**未运行 axe/WCAG 全量自动化审计与真实用户走查**，鼠标点击专项性能序列未测量。
 3. **真实进程 kill/restart 故障注入 E2E 未执行**；租约/检查点/恢复逻辑有单测。
 4. P1（Anthropic/Responses/MCP/图片/PDF/DOCX/语义检索）未实现并明确禁用；P2 团队能力不在首版。
 5. 未测量的性能项（点击 p95、动画帧、30 分钟内存）不宣称达标；已测量两项见验收报告。

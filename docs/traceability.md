@@ -41,7 +41,7 @@
 | AC-16 | 导出再导入一致 | server export/import + ZIP 安全 | `artifacts.test` + zip 测试 | ✅ |
 | AC-17 | CLI 与 UI 一致、CLI 无 DOM | CLI 走同一命令 API | CLI 97 + 真实服务冒烟 | ✅ |
 | AC-18 | 禁止静默模拟 | Demo/Live 分区、只读 Demo、明确错误码 | server 测试 + 生产冒烟 | ✅ |
-| AC-19 | 无障碍/减少动效/200% 缩放 | web 键盘/aria/reduced-motion/响应式 | 纯逻辑 + SSR 冒烟；无浏览器自动化 | ⚠️ 部分 |
+| AC-19 | 无障碍/减少动效/200% 缩放 | web 键盘/aria/reduced-motion/响应式 | Playwright 浏览器 E2E（35 checks：Tab 遍历、键盘切层、多视口、减少动效、零控制台错误） | ✅（未跑 axe 全量审计） |
 | AC-20 | 整体交付 | 全仓 + docs + Docker + 验收报告 | `pnpm install/typecheck/test/build` + 生产冒烟 | ✅（缺口见验收报告） |
 
 ## 3. P0 能力清单

@@ -73,7 +73,7 @@ export async function createApp(deps: AppDeps): Promise<FastifyInstance> {
       return;
     }
     // SPA fallback for client-side routes.
-    void serveStatic(deps.config, request.url, reply);
+    return serveStatic(deps.config, request.url, reply);
   });
 
   // Core routes resolve the active mode runtime per request, so a mode switch is
@@ -92,7 +92,7 @@ export async function createApp(deps: AppDeps): Promise<FastifyInstance> {
   // Static hosting of the built web app (production mode serves backend + frontend).
   app.get('/assets/*', async (request, reply) => {
     const url = (request.params as { '*': string })['*'];
-    void serveStaticFile(deps.config, path.join('assets', url), reply, request.id);
+    return serveStaticFile(deps.config, path.join('assets', url), reply, request.id);
   });
   app.get('/', async (request, reply) => serveStatic(deps.config, '/index.html', reply));
   app.get('/favicon.ico', async (_request, reply) => reply.status(204).send());

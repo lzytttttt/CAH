@@ -17,6 +17,7 @@
 | vitest | 2.1.9 | MIT |
 | esbuild | 0.24.2 | MIT |
 | tsx | 4.23.15 | MIT |
+| playwright（仅测试/验收） | 1.64.1 | Apache-2.0 |
 | @types/* | 22.20.5 / 18.3.31 / 18.3.7 | MIT |
 
 说明：
