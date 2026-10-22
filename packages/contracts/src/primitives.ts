@@ -75,6 +75,7 @@ export type ProviderProfileId = z.infer<typeof ProviderProfileIdSchema>;
 
 export const newTaskId = (): TaskId => TaskIdSchema.parse(newUuid());
 export const newArtifactId = (): ArtifactId => ArtifactIdSchema.parse(newUuid());
+export const newArtifactVersionId = (): ArtifactVersionId => ArtifactVersionIdSchema.parse(newUuid());
 export const newModuleId = (): ModuleId => ModuleIdSchema.parse(newUuid());
 export const newRunId = (): RunId => RunIdSchema.parse(newUuid());
 export const newStepId = (): StepId => StepIdSchema.parse(newUuid());

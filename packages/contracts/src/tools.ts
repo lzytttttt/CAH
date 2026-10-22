@@ -8,6 +8,7 @@ import {
   RunIdSchema,
   Sha256HexSchema,
   SourceIdSchema,
+  SourceSpanIdSchema,
   StepIdSchema,
   ToolCallIdSchema,
   UtcTimestampSchema,
@@ -244,10 +245,14 @@ export const SourceReadResultSchema = z.object({
 export type SourceReadResult = z.infer<typeof SourceReadResultSchema>;
 
 export const SearchHitSchema = z.object({
+  /** Deterministic span id: spanRef can be built directly from a hit. */
+  spanId: SourceSpanIdSchema,
   sourceId: SourceIdSchema,
   version: z.number().int().positive(),
   locator: SourceLocatorSchema,
   excerpt: z.string().max(LIMITS.previewExcerptChars),
+  /** sha256 of the exact excerpt text, used for evidence verification. */
+  quoteHash: Sha256HexSchema,
   score: z.number(),
 });
 export type SearchHit = z.infer<typeof SearchHitSchema>;

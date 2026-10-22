@@ -282,6 +282,13 @@ export const RecipeStalePayloadSchema = z.object({
 });
 export type RecipeStalePayload = z.infer<typeof RecipeStalePayloadSchema>;
 
+export const RecipeDisabledPayloadSchema = z.object({
+  recipeId: RecipeIdSchema,
+  version: z.number().int().positive(),
+  reason: z.string().max(2000),
+});
+export type RecipeDisabledPayload = z.infer<typeof RecipeDisabledPayloadSchema>;
+
 export const RecipeRunStartedPayloadSchema = z.object({
   recipeId: RecipeIdSchema,
   version: z.number().int().positive(),
@@ -445,6 +452,7 @@ export const EVENT_PAYLOAD_SCHEMAS = {
   'recipe.proposed': RecipeProposedPayloadSchema,
   'recipe.validated': RecipeValidatedPayloadSchema,
   'recipe.stale': RecipeStalePayloadSchema,
+  'recipe.disabled': RecipeDisabledPayloadSchema,
   'recipe.run_started': RecipeRunStartedPayloadSchema,
   'run.state_changed': RunStateChangedPayloadSchema,
   'run.queued': RunQueuedPayloadSchema,
@@ -501,6 +509,7 @@ export const EVENT_CATEGORY_BY_TYPE: Readonly<Record<EventType, EventCategory>> 
   'recipe.proposed': 'recipe',
   'recipe.validated': 'recipe',
   'recipe.stale': 'recipe',
+  'recipe.disabled': 'recipe',
   'recipe.run_started': 'recipe',
   'run.state_changed': 'control',
   'run.queued': 'control',

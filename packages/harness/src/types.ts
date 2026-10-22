@@ -32,9 +32,11 @@ import type {
   ValidationReport,
   WorkspaceSettings,
   ToolId,
+  ToolScope,
+  StepId as StepIdType,
 } from '@ca/contracts';
 import type { StoragePort } from '@ca/storage';
-import type { ToolRuntime, ValidatorPort } from '@ca/tools';
+import type { ToolContext, ToolRuntime, ValidatorPort } from '@ca/tools';
 
 /** Low-level model gateway consumed by the kernel (implemented by the server). */
 export interface ProviderGateway {
@@ -83,13 +85,31 @@ export const DEFAULT_HARNESS_CONFIG: Omit<HarnessConfig, 'mode'> = {
   debugTraceModelEvents: false,
 };
 
+/**
+ * Inputs for the server-provided tool context factory. The kernel never builds
+ * filesystem/network/auth context itself: the server resolves sources, scopes,
+ * capabilities and the abort signal and returns a sandboxed ToolContext.
+ */
+export interface ToolContextFactoryInput {
+  taskId: TaskId;
+  runId: RunId;
+  stepId: StepIdType;
+  toolCallId: string;
+  /** Scopes granted to this run by policy (derived from the committed plan). */
+  grantedScopes: readonly ToolScope[];
+  /** Aborted by pause/cancel/timeout; tools must check cooperatively. */
+  signal: AbortSignal;
+}
+
 export interface HarnessDeps {
   storage: StoragePort;
   providers: ProviderGateway;
   tools: ToolRuntime;
   config: HarnessConfig;
   clock?: Clock;
-  /** Called when a run reaches a terminal state (scheduler hook). */
+  /** Server-provided: builds the sandboxed ToolContext for every tool execute. */
+  toolContextFactory: (input: ToolContextFactoryInput) => Promise<ToolContext>;
+  /** Called exactly once when a run reaches a terminal state. */
   onRunFinished?: (runId: RunId, state: RunState) => void | Promise<void>;
   /** Called for every delta batch so the server can broadcast before commit. */
   onModelDelta?: (event: ModelEvent) => void;

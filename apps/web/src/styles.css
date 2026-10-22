@@ -13,6 +13,11 @@
   --ca-status-pending: #f59e0b;
   --ca-status-failed: #ef4444;
   --ca-accent-prospect: #38bdf8;
+  --ca-grid: rgba(167, 176, 192, 0.035);
+  --ca-hairline: rgba(255, 255, 255, 0.08);
+  --ca-motion-feedback: 120ms;
+  --ca-motion-normal: 220ms;
+  --ca-motion-bridge: 420ms;
 }
 
 html,
@@ -28,4 +33,156 @@ body {
   font-family: system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', sans-serif;
   font-size: 14px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Grid is a locator aid only: 2–4% opacity (design 16.1). */
+.ca-grid-bg {
+  background-image:
+    linear-gradient(var(--ca-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ca-grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: center top;
+}
+
+/* At most two glass layers in the whole workbench. */
+.ca-glass {
+  background-color: rgba(18, 21, 31, 0.86);
+  backdrop-filter: blur(10px);
+}
+
+.ca-solid {
+  background-color: var(--ca-bg-elevated);
+}
+
+.ca-hairline {
+  border: 1px solid var(--ca-hairline);
+}
+
+.ca-focus-ring:focus-visible {
+  outline: 2px solid var(--ca-accent-anchor);
+  outline-offset: 2px;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--ca-accent-anchor);
+  outline-offset: 2px;
+}
+
+/* Single breathing focus point, never full-screen, paused when hidden. */
+@keyframes ca-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.16), 0 0 24px 0 rgba(245, 158, 11, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.08), 0 0 32px 2px rgba(245, 158, 11, 0.16);
+  }
+}
+
+.ca-breathe {
+  animation: ca-breathe 4.8s ease-in-out infinite;
+}
+
+.ca-animation-paused .ca-breathe {
+  animation-play-state: paused;
+}
+
+@keyframes ca-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ca-fade-in {
+  animation: ca-fade-in var(--ca-motion-normal) ease-out both;
+}
+
+.ca-dimmed {
+  opacity: 0.32;
+  filter: saturate(0.6);
+}
+
+.ca-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(167, 176, 192, 0.35) transparent;
+}
+
+.ca-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.ca-scroll::-webkit-scrollbar-thumb {
+  background: rgba(167, 176, 192, 0.28);
+  border-radius: 8px;
+}
+
+.ca-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ca-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rendered markdown/source content keeps readable size; only internal scroll. */
+.ca-prose {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ca-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.ca-prose h1,
+.ca-prose h2,
+.ca-prose h3 {
+  font-weight: 600;
+  font-size: 15px;
+  margin: 0.6em 0 0.3em;
+}
+
+.ca-prose p {
+  margin: 0.4em 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .ca-breathe {
+    animation: none !important;
+  }
+}
+
+.ca-reduced-motion *,
+.ca-reduced-motion *::before,
+.ca-reduced-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* Screen-reader-only helper. */
+.ca-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }

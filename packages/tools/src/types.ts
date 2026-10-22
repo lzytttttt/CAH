@@ -38,6 +38,13 @@ export interface SourceReaderPort {
   getSource(taskId: TaskId, sourceId: SourceId, version: number): Promise<{ source: SourceItem; bytes: Uint8Array } | null>;
   listLatestContents(taskId: TaskId): Promise<Array<{ source: SourceItem; bytes: Uint8Array }>>;
   listSpans(taskId: TaskId, limit?: number): Promise<SourceSpan[]>;
+  /**
+   * Persist a source span produced by source.search as durable evidence.
+   * Span ids are deterministic (sourceId + version + locator + quoteHash), so a
+   * repeated search produces the same id; implementations must upsert, not fail
+   * on an existing id.
+   */
+  saveSpan(span: SourceSpan): Promise<void>;
 }
 
 /** Artifact access for artifact.* tools. */

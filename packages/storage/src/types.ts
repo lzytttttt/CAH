@@ -20,6 +20,7 @@ import type {
   EventType,
   HarnessEvent,
   PatchProposal,
+  ProviderProfile,
   Recipe,
   Run,
   RunCheckpoint,
@@ -183,6 +184,12 @@ export interface StoragePort {
   updateToolInvocation(record: ToolInvocationRecord): Promise<void>;
   listToolInvocations(runId: string): Promise<ToolInvocationRecord[]>;
   findUnclearToolInvocations(runId: string): Promise<ToolInvocationRecord[]>;
+
+  /* provider profiles (public part only; credentials are resolved outside storage) */
+  listProviderProfiles(): Promise<ProviderProfile[]>;
+  getProviderProfile(id: string): Promise<ProviderProfile | null>;
+  upsertProviderProfile(profile: ProviderProfile): Promise<void>;
+  deleteProviderProfile(id: string): Promise<void>;
 
   /* recipes */
   insertRecipe(recipe: Recipe): Promise<void>;

@@ -43,6 +43,27 @@ export interface AdapterOptions {
   idleTimeoutMs?: number;
   totalTimeoutMs?: number;
   now?: () => number;
+  /**
+   * URL policy applied to the profile base URL and to every redirect target.
+   * When omitted the adapter only accepts http(s) URLs and same-origin
+   * redirects (an approved call site should always pass the policy).
+   */
+  urlPolicy?: UrlPolicy;
+  /** Maximum number of method-preserving redirects to follow. Default 3. */
+  maxRedirects?: number;
+  /** Field used for the output token cap. Default 'max_tokens'. */
+  maxTokensField?: 'max_tokens' | 'max_completion_tokens';
+  /** Request `stream_options.include_usage` on streaming calls. Default true. */
+  includeStreamUsage?: boolean;
+  /**
+   * One-shot adaptive serialization: if a streaming request is rejected with
+   * 400/422 and the body explicitly complains about `stream_options` /
+   * `include_usage`, retry once without that optional field. Default true.
+   * This is never a fallback to another provider, model or mock.
+   */
+  retryWithoutStreamUsageOnBadRequest?: boolean;
+  /** Hard cap for error response bodies read for diagnostics. Default 64 KiB. */
+  maxErrorBodyBytes?: number;
 }
 
 export interface AdapterFactory {
@@ -58,6 +79,14 @@ export interface CapabilityTestInput {
   now?: () => number;
   /** Abort the whole capability test (does not abort a single probe silently). */
   signal?: AbortSignal;
+  /**
+   * Hard per-probe wall-clock guard. The adapter still applies the profile's
+   * own first-event/idle/total timeouts; this guard prevents a connection test
+   * from hanging when a provider trickles bytes forever. Default 45_000 ms.
+   */
+  probeTimeoutMs?: number;
+  /** Endpoint policy used when constructing the adapter under test. */
+  urlPolicy?: UrlPolicy;
 }
 
 export interface CapabilityTestOutput {
@@ -85,13 +114,25 @@ export class ProviderError extends Error {
   readonly retryable: boolean;
   readonly httpStatus: number | null;
   readonly retryAfterMs: number | null;
-  constructor(code: string, message: string, options: { retryable?: boolean; httpStatus?: number | null; retryAfterMs?: number | null } = {}) {
+  /** Provider-side request id (from response headers) when known. */
+  readonly providerRequestId: string | null;
+  constructor(
+    code: string,
+    message: string,
+    options: {
+      retryable?: boolean;
+      httpStatus?: number | null;
+      retryAfterMs?: number | null;
+      providerRequestId?: string | null;
+    } = {},
+  ) {
     super(message);
     this.name = 'ProviderError';
     this.code = code;
     this.retryable = options.retryable ?? false;
     this.httpStatus = options.httpStatus ?? null;
     this.retryAfterMs = options.retryAfterMs ?? null;
+    this.providerRequestId = options.providerRequestId ?? null;
   }
 }
 

@@ -39,8 +39,9 @@ import {
   WorkspaceSettingsSchema,
 } from './entities';
 import { PlanSchema } from './plan';
-import { PatchProposalSchema, ContentDiffSchema } from './patch';
+import { PatchProposalSchema, ContentDiffSchema, PatchStatusSchema } from './patch';
 import { ValidationReportSchema } from './validation';
+import { ModuleContentSchema } from './content';
 import {
   ModuleAcceptanceSummarySchema,
   EvidenceSummarySchema,
@@ -55,9 +56,19 @@ import { BudgetPolicySchema } from './budget';
 
 /* -------------------------------- session -------------------------------- */
 
+/**
+ * Revision semantics (single rule for clients):
+ * - `expectedRevision` on EVERY mutating command is the current `Task.revision`
+ *   from `GET /api/tasks/:id/snapshot` (workspace/provider commands excepted).
+ * - The server verifies it and bumps the task revision in the same transaction as
+ *   the state change; stale revisions return HTTP 409 `revision_conflict`.
+ * - Run/artifact internal revisions are not client-facing.
+ */
+
 export const SessionInfoSchema = z.object({
   authenticated: z.boolean(),
   mode: EngineModeSchema,
+  availableModes: z.array(EngineModeSchema).min(1).max(2),
   csrfToken: z.string().max(200),
   serverVersion: z.string().max(50),
   policyVersion: z.string().max(64).default(POLICY_VERSION),
@@ -81,10 +92,30 @@ export type WorkspaceView = z.infer<typeof WorkspaceViewSchema>;
 
 export const UpdateWorkspaceRequestSchema = z.object({
   commandId: CommandIdSchema,
-  expectedRevision: RevisionSchema.optional(),
   settings: WorkspaceSettingsSchema.partial(),
 });
 export type UpdateWorkspaceRequest = z.infer<typeof UpdateWorkspaceRequestSchema>;
+
+export const UpdateWorkspaceResponseSchema = z.object({
+  commandId: CommandIdSchema,
+  duplicate: z.boolean().default(false),
+  workspace: WorkspaceSchema,
+});
+export type UpdateWorkspaceResponse = z.infer<typeof UpdateWorkspaceResponseSchema>;
+
+export const SwitchModeRequestSchema = z.object({
+  commandId: CommandIdSchema,
+  mode: EngineModeSchema,
+});
+export type SwitchModeRequest = z.infer<typeof SwitchModeRequestSchema>;
+
+export const SwitchModeResponseSchema = z.object({
+  commandId: CommandIdSchema,
+  duplicate: z.boolean().default(false),
+  mode: EngineModeSchema,
+  redirected: z.boolean().default(false),
+});
+export type SwitchModeResponse = z.infer<typeof SwitchModeResponseSchema>;
 
 /* -------------------------------- provider -------------------------------- */
 
@@ -118,6 +149,11 @@ export const ProviderProfileResponseSchema = z.object({
 });
 export type ProviderProfileResponse = z.infer<typeof ProviderProfileResponseSchema>;
 
+export const ProviderProfileListResponseSchema = z.object({
+  profiles: z.array(ProviderProfilePublicSchema).max(20),
+});
+export type ProviderProfileListResponse = z.infer<typeof ProviderProfileListResponseSchema>;
+
 export const CAPABILITY_PROBES = ['auth_and_text', 'streaming', 'tool_calling', 'structured_output', 'usage'] as const;
 export const CapabilityProbeNameSchema = z.enum(CAPABILITY_PROBES);
 export type CapabilityProbeName = z.infer<typeof CapabilityProbeNameSchema>;
@@ -149,8 +185,9 @@ export const CreateTaskRequestSchema = z.object({
   intent: z.string().min(1).max(8000),
   artifactTitle: z.string().min(1).max(200),
   constraints: z.array(ConstraintSchema.omit({ status: true })).max(64).default([]),
+  /** When no explicit modules are given, the server expands this built-in template. */
   templateId: z.string().min(1).max(100).nullable().default(null),
-  modules: z.array(TaskModuleInputSchema).min(1).max(LIMITS.maxModulesPerArtifact).default([]),
+  modules: z.array(TaskModuleInputSchema).max(LIMITS.maxModulesPerArtifact).default([]),
 });
 export type CreateTaskRequest = z.infer<typeof CreateTaskRequestSchema>;
 
@@ -185,11 +222,19 @@ export const UpdateTaskRequestSchema = z.object({
 });
 export type UpdateTaskRequest = z.infer<typeof UpdateTaskRequestSchema>;
 
+export const UpdateTaskResponseSchema = z.object({
+  commandId: CommandIdSchema,
+  duplicate: z.boolean().default(false),
+  task: TaskSchema,
+});
+export type UpdateTaskResponse = z.infer<typeof UpdateTaskResponseSchema>;
+
 export const TaskListResponseSchema = z.object({
   tasks: z
     .array(
       z.object({
         taskId: TaskIdSchema,
+        artifactId: ArtifactIdSchema,
         title: TaskSchema.shape.title,
         status: TaskSchema.shape.status,
         revision: RevisionSchema,
@@ -312,11 +357,19 @@ export const RejectPatchRequestSchema = z.object({
 });
 export type RejectPatchRequest = z.infer<typeof RejectPatchRequestSchema>;
 
+export const RejectPatchResponseSchema = z.object({
+  commandId: CommandIdSchema,
+  duplicate: z.boolean().default(false),
+  patchId: PatchIdSchema,
+  status: PatchStatusSchema,
+});
+export type RejectPatchResponse = z.infer<typeof RejectPatchResponseSchema>;
+
 export const PatchReviewResponseSchema = z.object({
   patch: PatchProposalSchema,
   diff: ContentDiffSchema,
   validation: ValidationReportSchema.nullable(),
-  baseContent: z.unknown().nullable(),
+  baseContent: ModuleContentSchema.nullable(),
 });
 export type PatchReviewResponse = z.infer<typeof PatchReviewResponseSchema>;
 
@@ -345,7 +398,7 @@ export const ModuleContentResponseSchema = z.object({
   versionId: ArtifactVersionIdSchema.nullable(),
   contentHash: z.string().max(64).nullable(),
   moduleKind: z.enum(['markdown', 'json', 'csv']),
-  content: z.unknown(),
+  content: ModuleContentSchema.nullable(),
   acceptedAt: UtcTimestampSchema.nullable(),
   acceptedBy: z.string().max(100).nullable(),
 });
@@ -377,6 +430,46 @@ export const CreateRecipeRequestSchema = z.object({
   proposal: RecipeProposalInputSchema,
 });
 export type CreateRecipeRequest = z.infer<typeof CreateRecipeRequestSchema>;
+
+/**
+ * Server-side recipe extraction from a finished run (design 13.3): the UI never
+ * has to invent steps itself. The returned proposal is reviewed by a human
+ * before POST /api/recipes registers it.
+ */
+export const ProposeRecipeRequestSchema = z.object({
+  commandId: CommandIdSchema,
+  runId: RunIdSchema,
+  name: z.string().min(1).max(200),
+  description: z.string().max(4000).default(''),
+  kind: z.enum(['deterministic', 'llm_assisted', 'cached_snapshot']),
+  applicability: z.string().max(2000).default(''),
+});
+export type ProposeRecipeRequest = z.infer<typeof ProposeRecipeRequestSchema>;
+
+export const ProposeRecipeResponseSchema = z.object({
+  commandId: CommandIdSchema,
+  duplicate: z.boolean().default(false),
+  proposal: RecipeProposalInputSchema,
+  sourceRunId: RunIdSchema,
+  traceStepCount: z.number().int().nonnegative(),
+});
+export type ProposeRecipeResponse = z.infer<typeof ProposeRecipeResponseSchema>;
+
+export const RecipeResponseSchema = z.object({
+  recipe: RecipeSchema,
+});
+export type RecipeResponse = z.infer<typeof RecipeResponseSchema>;
+
+export const RecipeListResponseSchema = z.object({
+  recipes: z.array(RecipeSchema).max(100),
+});
+export type RecipeListResponse = z.infer<typeof RecipeListResponseSchema>;
+
+export const DisableRecipeRequestSchema = z.object({
+  commandId: CommandIdSchema,
+  reason: z.string().max(2000).default(''),
+});
+export type DisableRecipeRequest = z.infer<typeof DisableRecipeRequestSchema>;
 
 export const CreateRecipeResponseSchema = z.object({
   commandId: CommandIdSchema,
@@ -441,7 +534,10 @@ export const RunDetailResponseSchema = z.object({
     taskId: TaskIdSchema,
     moduleId: ModuleIdSchema,
     state: z.string().max(30),
+    revision: RevisionSchema,
     attempt: z.number().int().positive(),
+    planVersion: z.number().int().nonnegative(),
+    contextSnapshotId: ContextSnapshotIdSchema.nullable(),
     budgetUsage: BudgetUsageSchema,
     error: z.unknown().nullable(),
     interrupted: z.unknown().nullable(),
@@ -478,9 +574,11 @@ export const TaskSnapshotSchema = z.object({
       runId: RunIdSchema,
       moduleId: ModuleIdSchema,
       state: z.string().max(30),
+      revision: RevisionSchema,
       attempt: z.number().int().positive(),
-      budgetUsage: BudgetUsageSchema,
       planVersion: z.number().int().nonnegative(),
+      contextSnapshotId: ContextSnapshotIdSchema.nullable(),
+      budgetUsage: BudgetUsageSchema,
       error: z.unknown().nullable(),
       interrupted: z.unknown().nullable(),
     })
@@ -592,19 +690,26 @@ export const API_ROUTES = {
   taskExport: (id: string) => `/api/tasks/${id}/export`,
   taskModuleContent: (taskId: string, moduleId: string) => `/api/tasks/${taskId}/modules/${moduleId}/content`,
   taskVersions: (taskId: string, moduleId: string) => `/api/tasks/${taskId}/modules/${moduleId}/versions`,
+  workspaceMode: '/api/workspace/mode',
+  runBase: '/api/runs',
   run: (id: string) => `/api/runs/${id}`,
   runCommit: (id: string) => `/api/runs/${id}/commit`,
   runResolve: (id: string) => `/api/runs/${id}/resolve`,
   runPause: (id: string) => `/api/runs/${id}/pause`,
   runResume: (id: string) => `/api/runs/${id}/resume`,
   runCancel: (id: string) => `/api/runs/${id}/cancel`,
+  patches: '/api/patches',
   patch: (id: string) => `/api/patches/${id}`,
   patchAccept: (id: string) => `/api/patches/${id}/accept`,
   patchReject: (id: string) => `/api/patches/${id}/reject`,
+  artifactBase: '/api/artifacts',
   artifactRestore: (id: string) => `/api/artifacts/${id}/restore`,
   recipes: '/api/recipes',
+  recipePropose: '/api/recipes/propose',
+  recipe: (id: string) => `/api/recipes/${id}`,
   recipeValidate: (id: string) => `/api/recipes/${id}/validate`,
   recipeRun: (id: string) => `/api/recipes/${id}/run`,
+  recipeDisable: (id: string) => `/api/recipes/${id}/disable`,
   imports: '/api/imports',
   demoReset: '/api/demo/reset',
   demoScenario: '/api/demo/scenario',

@@ -17,6 +17,7 @@ export * from './plan';
 export * from './entities';
 export * from './events';
 export * from './recipes';
+export * from './resolution';
 export * from './projection';
 export * from './api';
 
