@@ -3,6 +3,7 @@ import {
   ArtifactModuleSchema,
   BudgetPolicySchema,
   createBudgetUsage,
+  LIMITS,
   newRunId,
   utcNow,
   type Artifact,
@@ -98,6 +99,16 @@ describe('task bundle aggregate', () => {
         artifact: { ...bundle.artifact, taskId: bundle.artifact.id as unknown as Task['id'] },
       }),
     ).rejects.toThrow();
+    // Duplicate ids in artifact.moduleIds are rejected even when lengths match.
+    await expect(
+      storage.insertTaskBundle({
+        ...bundle,
+        artifact: {
+          ...bundle.artifact,
+          moduleIds: [bundle.modules[0]!.id, bundle.modules[0]!.id],
+        },
+      }),
+    ).rejects.toThrow(/duplicates/i);
     expect(await storage.listTasks()).toHaveLength(0);
   });
 
@@ -135,6 +146,13 @@ describe('task bundle aggregate', () => {
     ]);
     expect(await storage.getArtifact(bundle.artifact.id)).toEqual(bundle.artifact);
     expect(await storage.getArtifact('00000000-0000-4000-8000-000000000002')).toBeNull();
+
+    // Modules can never be moved to another artifact.
+    const other = makeTaskBundle((await storage.getWorkspace()).id, { kinds: ['markdown'] });
+    await storage.insertTaskBundle(other);
+    await expect(
+      storage.updateModules([moduleWith(first, { artifactId: other.artifact.id })]),
+    ).rejects.toMatchObject({ code: 'state_not_allowed' });
   });
 });
 
@@ -220,6 +238,16 @@ describe('sources and spans', () => {
     ).rejects.toThrow(/declares/i);
   });
 
+  it('enforces the per-file source size limit before hashing or writing', async () => {
+    const { storage, bundle } = await setup(['markdown']);
+    const oversized = new Uint8Array(LIMITS.maxSourceFileBytes + 1);
+    const source = makeSource(bundle.task.id);
+    await expect(
+      storage.insertSource({ ...source.source, sizeBytes: oversized.byteLength }, oversized),
+    ).rejects.toMatchObject({ code: 'payload_too_large' });
+    expect((await storage.objects.listObjects()).length).toBe(0);
+  });
+
   it('inserts spans, upserts them idempotently by id, and filters by task', async () => {
     const { storage, bundle } = await setup(['markdown']);
     const source = makeSource(bundle.task.id);
@@ -268,6 +296,16 @@ describe('runs, steps and checkpoints', () => {
     expect(await storage.countActiveRuns()).toBe(1);
     expect(await storage.listQueuedRuns()).toHaveLength(0);
 
+    // Runs are physically mode-scoped and their module must belong to the task.
+    await expect(storage.insertRun({ ...makeRun(bundle.task, module.id), mode: 'live' })).rejects.toMatchObject({
+      code: 'state_not_allowed',
+    });
+    const other = makeTaskBundle((await storage.getWorkspace()).id, { kinds: ['markdown'] });
+    await storage.insertTaskBundle(other);
+    await expect(
+      storage.insertRun({ ...makeRun(bundle.task, module.id), moduleId: other.modules[0]!.id }),
+    ).rejects.toMatchObject({ code: 'state_not_allowed' });
+
     const queued = makeRun(bundle.task, module.id, { state: 'CREATED' });
     await storage.insertRun({ ...queued, queuePosition: 2 });
     const queuedFirst = makeRun(bundle.task, module.id, { state: 'CREATED' });
@@ -284,6 +322,21 @@ describe('runs, steps and checkpoints', () => {
     expect(await storage.findActiveRunId(bundle.task.id)).toBeNull();
     // Queued CREATED runs are not executing, so they do not count as active.
     expect(await storage.countActiveRuns()).toBe(0);
+
+    // A READY run waiting for global capacity is also "queued" (state READY),
+    // because listQueuedRuns serves the server capacity scheduler.
+    const readyQueued = makeRun(bundle.task, module.id, { state: 'READY' });
+    await storage.insertRun({ ...readyQueued, queuePosition: 3 });
+    expect((await storage.listQueuedRuns()).map((entry) => entry.id)).toEqual([
+      queuedFirst.id,
+      queued.id,
+      readyQueued.id,
+    ]);
+    expect(await storage.countActiveRuns()).toBe(1);
+    // Clearing the queue position removes a run from the queue.
+    const readyStored = await storage.getRun(readyQueued.id);
+    await storage.updateRun({ ...readyStored!, queuePosition: null, updatedAt: utcNow() }, readyStored!.revision);
+    expect(await storage.listQueuedRuns()).toHaveLength(2);
   });
 
   it('rejects runs/steps for unknown parents and supports step updates', async () => {

@@ -268,6 +268,17 @@ export async function executeArtifactRead(
     assertVersionBelongsToModule(version, module);
   }
 
+  if (!version && module.kind === 'csv') {
+    // The contract's CsvContent requires at least one column, so an empty csv
+    // module has no representable content value; say so instead of inventing a
+    // placeholder column the module does not have.
+    throw new ToolRuntimeError(
+      'version_not_found',
+      `module "${module.title}" has no accepted version yet and an empty CSV content value cannot be represented (CSV content requires at least one column); create content with artifact.propose_patch first`,
+      { details: { moduleId: module.id } },
+    );
+  }
+
   const content: ModuleContent = version ? version.content : emptyContentForKind(module.kind);
   return {
     moduleId: module.id,

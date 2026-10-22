@@ -130,6 +130,11 @@ export interface TableFromJsonOptions {
 export function tableFromJsonValue(value: JsonValue, options: TableFromJsonOptions = {}): TableData {
   const issues = options.issues;
   if (Array.isArray(value)) {
+    if (value.length > LIMITS.maxCsvRows) {
+      throw new JsonDataError('limit_exceeded', `json array has ${value.length} rows (limit ${LIMITS.maxCsvRows})`, {
+        limit: LIMITS.maxCsvRows,
+      });
+    }
     if (value.length === 0) return { columns: [], rows: [] };
     const allObjects = value.every((item) => isPlainRecord(item));
     if (allObjects) {

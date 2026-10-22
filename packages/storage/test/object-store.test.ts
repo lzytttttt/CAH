@@ -124,6 +124,20 @@ describe('FileObjectStore', () => {
     expect((await store.get(ref.hash))!.mime).toBe('text/plain');
   });
 
+  it('sweeps crash-left temp files from the root and shard directories only', async () => {
+    const { store } = await makeStore();
+    const ref = await store.put(new TextEncoder().encode('kept'), 'text/plain');
+    const shardDir = path.dirname(store.pathFor(ref.hash));
+    await fs.writeFile(path.join(shardDir, '.tmp-crash-1'), 'partial');
+    await fs.writeFile(path.join(store.root, '.tmp-crash-2'), 'partial');
+    const removed = await store.sweepTempFiles();
+    expect(removed).toBe(2);
+    expect(await store.has(ref.hash)).toBe(true);
+    expect((await store.get(ref.hash))!.bytes.byteLength).toBe(4);
+    const leftovers = (await listAllFiles(store.root)).filter((file) => path.basename(file).startsWith('.tmp-'));
+    expect(leftovers).toEqual([]);
+  });
+
   it('refuses to follow symbolic links at an object path', async () => {
     const { store } = await makeStore();
     const target = path.join(store.root, 'target.bin');

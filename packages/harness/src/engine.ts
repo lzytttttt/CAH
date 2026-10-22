@@ -350,12 +350,15 @@ class HarnessEngineImpl implements HarnessEngine {
         const fresh = await this.runtime.loadRun(run.id);
         if (fresh.state !== 'READY') return fresh;
         const checkpoint = await this.runtime.checkpoint(fresh, 'state', null, { phase: 'ready', note });
-        let next = transitionRun(fresh, 'PAUSING', note, this.clock.now(), { checkpointId: checkpoint.id });
+        // The checkpoint helper persisted a new run pointer inside this transaction;
+        // re-read so the revision CAS below uses the current revision.
+        const current = await this.runtime.loadRun(fresh.id);
+        let next = transitionRun(current, 'PAUSING', note, this.clock.now(), { checkpointId: checkpoint.id });
         next = transitionRun(next, 'PAUSED', note, this.clock.now(), {
           checkpointId: checkpoint.id,
           returnState: 'READY',
         });
-        await this.storage.updateRun(next, fresh.revision);
+        await this.storage.updateRun(next, current.revision);
         tx.emit('run.state_changed', { from: 'READY', to: 'PAUSING', reason: note.slice(0, 2000) });
         tx.emit('run.state_changed', { from: 'PAUSING', to: 'PAUSED', reason: note.slice(0, 2000) });
         tx.emit('run.paused', {
@@ -676,6 +679,7 @@ class HarnessEngineImpl implements HarnessEngine {
     control.pauseRequested = true;
     control.note = `用户 ${command.actor} 请求暂停`;
     if (run.state === 'PLANNING') {
+      // Planning is a short, bounded step: let the plan finish, then pause at READY.
       await this.runtime.txn(
         run.taskId,
         async (tx) => {
@@ -690,6 +694,9 @@ class HarnessEngineImpl implements HarnessEngine {
       );
       return;
     }
+    // Pause stops scheduling new steps; an in-flight model/tool request is aborted
+    // when it supports cancellation and we settle at the next safe boundary.
+    control.abort.abort(new Error('pause'));
     await this.runtime.txn(
       run.taskId,
       async (tx) => {
@@ -1101,6 +1108,7 @@ class HarnessEngineImpl implements HarnessEngine {
       artifact: updatedArtifact,
       events,
       runIdForTransition: run?.id ?? null,
+      markAutoAccept: params.route === 'auto_accept_policy',
     });
 
     if (run) await this.runtime.finalizeTerminal(run.id);
@@ -1121,9 +1129,9 @@ class HarnessEngineImpl implements HarnessEngine {
    * AWAITING_REVIEW.
    */
   private async commitAcceptanceSafely(
-    input: CommitAcceptanceInput & { runIdForTransition: string | null },
+    input: CommitAcceptanceInput & { runIdForTransition: string | null; markAutoAccept: boolean },
   ): Promise<CommitAcceptanceResult> {
-    const { runIdForTransition, ...acceptance } = input;
+    const { runIdForTransition, markAutoAccept, ...acceptance } = input;
     try {
       return await this.storage.transaction(async () => {
         if (runIdForTransition) {
@@ -1158,6 +1166,7 @@ class HarnessEngineImpl implements HarnessEngine {
               updatedAt: this.clock.now(),
               revision: latestRun.revision + 1,
               returnState: null,
+              autoAcceptPolicyApplied: markAutoAccept || latestRun.autoAcceptPolicyApplied,
             };
             await this.storage.updateRun(completed, latestRun.revision);
           }
@@ -1591,15 +1600,15 @@ class HarnessEngineImpl implements HarnessEngine {
       }
       if (repairAttempt >= run.budgetPolicy.maxStructureRepairs) {
         const findings = [...summarizeValidationFailures(report.checks, 8), ...problems];
-        await this.pauseValidation(run, '校验失败且修复次数已用尽', {
+        await this.runtime.checkpoint(run, 'state', null, {
           phase: 'repair',
           candidate: safeCandidateForCheckpoint(candidate),
           evidenceRefs,
           problems,
           patchId: params.patchId,
           repairAttempt,
+          findings,
         });
-        void findings;
         await this.raiseValidationBlocker(run, task, module, report, problems);
         return;
       }
@@ -1986,7 +1995,14 @@ class HarnessEngineImpl implements HarnessEngine {
       return this.startLoop(run.id, 'execution');
     }
     if (run.state === 'INTERRUPTED') {
-      const unclear = await this.storage.findUnclearToolInvocations(run.id);
+      const unclearFromStorage = await this.storage.findUnclearToolInvocations(run.id);
+      const interruptedIds = new Set(run.interrupted?.unclearToolCalls ?? []);
+      const recorded = (await this.storage.listToolInvocations(run.id)).filter(
+        (record) => interruptedIds.has(record.toolCallId) || (record.status !== 'succeeded' && record.status !== 'failed' && record.status !== 'denied'),
+      );
+      const unclearRecords = new Map<string, (typeof recorded)[number]>();
+      for (const record of [...unclearFromStorage, ...recorded]) unclearRecords.set(record.toolCallId, record);
+      const unclear = [...unclearRecords.values()];
       const descriptors = await this.runtime.toolDescriptors();
       const unsafe = unclear.filter((record) => {
         const descriptor = descriptors.get(record.toolId);

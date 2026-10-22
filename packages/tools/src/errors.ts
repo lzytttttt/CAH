@@ -32,6 +32,7 @@ export const TOOL_ERROR_CODES = [
   'duplicate_column',
   'invalid_operator_value',
   'unsafe_regex',
+  'cast_failed',
   'transform_failed',
   'limit_exceeded',
   'module_not_found',

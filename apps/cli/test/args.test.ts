@@ -95,7 +95,14 @@ describe('ParsedCommand.parse', () => {
   });
 
   it('treats tokens after -- as positionals', () => {
-    const command = parse(['x', '--', '--not-a-flag'], flags, positionals);
+    const command = parse(
+      ['x', '--', '--not-a-flag'],
+      flags,
+      [
+        { name: 'taskId', description: '任务', required: true },
+        { name: 'rest', description: '其余', required: false },
+      ],
+    );
     expect(command.positionals).toEqual(['x', '--not-a-flag']);
   });
 });

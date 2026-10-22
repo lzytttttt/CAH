@@ -91,6 +91,14 @@ describe('backupTo', () => {
     expect(manifest.objects.totalBytes).toBeGreaterThanOrEqual(source.content.byteLength);
   });
 
+  it('rejects a backup destination inside the live mode directory', async () => {
+    const { storage } = await createTempStorage();
+    await expect(storage.backupTo(storage.modeDir)).rejects.toMatchObject({ code: 'invalid_path' });
+    await expect(storage.backupTo(path.join(storage.modeDir, 'nested'))).rejects.toMatchObject({
+      code: 'invalid_path',
+    });
+  });
+
   it('writes independent snapshots for successive backups', async () => {
     const { storage, workspace } = await createTempStorage();
     const first = makeTaskBundle(workspace.id, { kinds: ['markdown'] });

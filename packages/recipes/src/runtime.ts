@@ -43,7 +43,6 @@ import {
   type Recipe,
   type RecipeBinding,
   type RecipeParameter,
-  type RecipeRunOutput,
   type RecipeRunResult,
   type RecipeStep,
   type RecipeStepGuard,
@@ -113,6 +112,7 @@ import type {
   RecipeInputValidation,
   RecipeRunContext,
   RecipeRunObserver,
+  RecipeRunOutput,
   RecipeRuntime,
   RecipeRuntimeOptions,
   RecipeSourceMeta,
@@ -130,6 +130,12 @@ interface BuiltinValidator {
   id: string;
   description: string;
   check(value: unknown): { ok: boolean; findings: string[] };
+}
+
+function moduleContentFromValidatorValue(value: unknown): ModuleContent | null {
+  if (isModuleContent(value)) return value;
+  if (isPlainRecord(value) && isModuleContent(value.content)) return value.content;
+  return null;
 }
 
 function tableFromValidatorValue(value: unknown): TableData | null {
@@ -192,7 +198,9 @@ const BUILTIN_VALIDATORS: Readonly<Record<string, BuiltinValidator>> = {
     id: 'content.schema',
     description: 'The previous step value is a schema-valid ModuleContent.',
     check(value) {
-      const parsed = ModuleContentSchema.safeParse(value);
+      const content = moduleContentFromValidatorValue(value);
+      if (!content) return { ok: false, findings: ['previous step value is not a ModuleContent'] };
+      const parsed = ModuleContentSchema.safeParse(content);
       if (parsed.success) return { ok: true, findings: [] };
       return {
         ok: false,
@@ -204,7 +212,9 @@ const BUILTIN_VALIDATORS: Readonly<Record<string, BuiltinValidator>> = {
     id: 'content.limits',
     description: 'The previous ModuleContent value is inside the contract size limits.',
     check(value) {
-      const parsed = ModuleContentSchema.safeParse(value);
+      const rawContent = moduleContentFromValidatorValue(value);
+      if (!rawContent) return { ok: false, findings: ['value is not a ModuleContent'] };
+      const parsed = ModuleContentSchema.safeParse(rawContent);
       if (!parsed.success) return { ok: false, findings: ['value is not a ModuleContent'] };
       const content = parsed.data;
       const findings: string[] = [];
@@ -1109,6 +1119,97 @@ async function materializeTable(
 }
 
 /* ------------------------------------------------------------------ */
+/* Data-shape preflight (field mapping gate)                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Deterministic field-mapping preflight for source-bound transform steps.
+ *
+ * A rename operation that silently matches nothing would leave the canonical
+ * columns missing and each later operator would fail with a generic "unknown
+ * column" message. This gate explains the real problem instead: the source
+ * header contains none of the expected aliases for a required canonical field
+ * (for example a CSV without a `system_id` mapping).
+ */
+function transformColumnPreflight(
+  recipe: Recipe,
+  cache: SourceCache,
+  bindings: SourceBindings,
+): string[] {
+  const errors: string[] = [];
+  for (const step of recipe.steps) {
+    if (step.kind !== 'data.transform' || step.input.kind !== 'parameter') continue;
+    const inputBinding = step.input;
+    const parameter = recipe.inputParameters.find((candidate) => candidate.name === inputBinding.name);
+    if (!parameter || parameter.type !== 'source') continue;
+    const bound = bindings[parameter.name];
+    if (!bound) continue;
+    const entry = cache.get(sourceKey(bound.sourceId, bound.version));
+    if (!entry) continue;
+    let header: string[];
+    try {
+      header = coerceTableFromText(entry.text, step.format).columns.map((column) => column.key);
+    } catch {
+      // Parsing problems are reported by the dry-run pipeline itself.
+      continue;
+    }
+    const rename = step.operations.find((operation) => operation.op === 'rename');
+    if (!rename || rename.op !== 'rename') continue;
+    const aliasesFor = new Map<string, string[]>();
+    for (const [alias, target] of Object.entries(rename.mapping)) {
+      const list = aliasesFor.get(target) ?? [];
+      list.push(alias);
+      aliasesFor.set(target, list);
+    }
+    const afterRename = new Set(header);
+    for (const [alias, target] of Object.entries(rename.mapping)) {
+      if (afterRename.has(alias)) {
+        afterRename.delete(alias);
+        afterRename.add(target);
+      }
+    }
+    const required = new Set<string>();
+    for (const operation of step.operations) {
+      switch (operation.op) {
+        case 'dedupe':
+          for (const key of operation.keys) required.add(key);
+          break;
+        case 'require':
+          for (const column of operation.columns) required.add(column);
+          break;
+        case 'normalize':
+        case 'cast':
+        case 'fill':
+        case 'map':
+        case 'sort':
+        case 'filter':
+          required.add(operation.column);
+          break;
+        case 'select':
+          for (const column of operation.columns) required.add(column);
+          break;
+        default:
+          break;
+      }
+    }
+    for (const target of [...required].sort()) {
+      if (afterRename.has(target)) continue;
+      const aliases = aliasesFor.get(target) ?? [];
+      if (aliases.length > 0) {
+        errors.push(
+          `step "${step.id}" (data.transform): missing ${target} mapping — the source header has none of the expected aliases (${aliases.join(', ')}); available columns: ${header.join(', ')}`,
+        );
+      } else {
+        errors.push(
+          `step "${step.id}" (data.transform): required column "${target}" is missing from the source header; available columns: ${header.join(', ')}`,
+        );
+      }
+    }
+  }
+  return errors;
+}
+
+/* ------------------------------------------------------------------ */
 /* Validators                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -1317,12 +1418,9 @@ async function executeStep(step: RecipeStep, env: ExecutionEnvironment, state: E
     case 'data.transform': {
       const issues: string[] = [];
       const materialized = await materializeTable(step.input, env, state, step, step.format, issues);
-      let outcome: { table: TableData; issues: string[] };
-      try {
-        outcome = applyTransformOperations(materialized.table, step.operations);
-      } catch (error) {
-        throw normalizeStepError(step, error);
-      }
+      // Structural operator errors (unknown column, unsafe regex, ...) are
+      // mapped to a structured recipe error once by executePipeline.
+      const outcome = applyTransformOperations(materialized.table, step.operations);
       const allIssues = [...issues, ...outcome.issues].slice(0, 200).map((issue) => bound(issue, 500));
       const serialized = serializeTransformedTable(outcome.table, step.format);
       if (serialized.bytes.length > LIMITS.maxSourceFileBytes) {
@@ -1424,8 +1522,10 @@ async function executeStep(step: RecipeStep, env: ExecutionEnvironment, state: E
           },
         );
       }
+      // validate is a transparent pass-through: downstream steps keep binding
+      // the same value while the validation findings stay in the run ledger.
       return {
-        value: { validatorResults: results, passed: true },
+        value: state.lastValue,
         issues: [],
         objectHash: null,
         rowCount: null,
@@ -1797,6 +1897,18 @@ export function createRecipeRuntime(options: RecipeRuntimeOptions): RecipeRuntim
         recipe: normalized,
       };
     }
+    const shapeErrors = transformColumnPreflight(normalized, resolved.cache, resolved.bindings);
+    if (shapeErrors.length > 0) {
+      return {
+        ok: false,
+        errors: shapeErrors,
+        validation,
+        bindings: resolved.bindings,
+        cache: resolved.cache,
+        sourceMeta: resolved.meta,
+        recipe: normalized,
+      };
+    }
     const drySignal = ctx.signal ?? new AbortController().signal;
     const env: ExecutionEnvironment = {
       deps,
@@ -1817,7 +1929,12 @@ export function createRecipeRuntime(options: RecipeRuntimeOptions): RecipeRuntim
       try {
         await executePipeline(normalized, env, state);
       } catch (error) {
-        if (!(error instanceof StopPreflight)) {
+        if (error instanceof StopPreflight) {
+          // Preflight cannot execute model steps; everything deterministic before
+          // the first model step has already been checked.
+        } else if (isAbortLike(error)) {
+          throw error;
+        } else {
           errors.push(isRecipeRuntimeError(error) ? `${error.code}: ${error.message}` : errorMessage(error));
         }
       }
@@ -1882,7 +1999,7 @@ export function createRecipeRuntime(options: RecipeRuntimeOptions): RecipeRuntim
 
   async function executeRun(
     recipe: Recipe,
-    normalizedInputs: JsonObject,
+    normalizedInputs: Record<string, unknown>,
     ctx: RecipeRunContext,
     pre: PreflightInternal,
   ): Promise<RecipeRunResult> {
@@ -1933,7 +2050,7 @@ export function createRecipeRuntime(options: RecipeRuntimeOptions): RecipeRuntim
     assertRunnable(recipe);
     const compiled = compileRecipe(recipe, options);
     const normalized = compiled.recipe;
-    const inputs = (ctx.params ?? {}) as JsonObject;
+    const inputs = (ctx.params ?? {}) as unknown as JsonObject;
     const validation = validateInputs(normalized, inputs);
     if (!validation.ok) {
       throw new RecipeRuntimeError('invalid_input', `recipe inputs are invalid: ${validation.errors.slice(0, 10).join('; ')}`, {
@@ -2002,7 +2119,6 @@ export function createRecipeRuntime(options: RecipeRuntimeOptions): RecipeRuntim
 
     for (const testCase of testCases) {
       const lastRunAt = deps.now();
-      if (testCases.length > 16) break;
       const inputs = inputsByCase[testCase.id] ?? testCase.inputs;
       const mismatchedExpectation =
         (testCase.kind === 'invalid' && testCase.expectation !== 'reject') ||

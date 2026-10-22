@@ -23,7 +23,6 @@ import type {
   ModuleId,
   Recipe,
   RecipeProposalInput,
-  RecipeRunOutput,
   RecipeRunResult,
   RecipeStep,
   RecipeTestCase,
@@ -32,6 +31,9 @@ import type {
   TaskId,
 } from '@ca/contracts';
 import type { ArtifactAccessPort, ObjectWriterPort, SourceReaderPort, ValidatorPort } from '@ca/tools';
+
+/** One emitted recipe run output (contracts exports the schema but no named type). */
+export type RecipeRunOutput = RecipeRunResult['outputs'][number];
 
 export interface RecipeExecutionDeps {
   sources: SourceReaderPort;

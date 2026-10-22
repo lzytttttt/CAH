@@ -263,7 +263,7 @@ function acceptance(input: {
 /* ------------------------------- plan / risks ------------------------------- */
 
 function evidenceSpan(spanId: string, sourceId: string, span: Record<string, unknown>): Record<string, unknown> {
-  return { kind: 'source_span', span: { ...span, id: spanId, sourceId } };
+  return { kind: 'source_span', span: { ...span, spanId, sourceId } };
 }
 
 /* --------------------------------- builder --------------------------------- */

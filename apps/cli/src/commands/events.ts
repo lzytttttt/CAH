@@ -61,7 +61,9 @@ export const eventsTailCommand: CommandSpec = {
     const reconnect = command.getBool('--reconnect');
     const maxReconnects = Math.max(0, command.getNumber('--max-reconnects') ?? 5);
     const jsonl = command.getBool('--jsonl');
-    const streamJsonLines = jsonl && ctx.globals.json;
+    // `--jsonl` is the explicit streaming exception: one JSON object per line.
+    // `--json` remains the single-document contract for non-streaming commands.
+    const streamJsonLines = jsonl;
 
     const collected: HarnessEvent[] = [];
     let lastSeq = after;
@@ -190,7 +192,7 @@ export const eventsTailCommand: CommandSpec = {
       interrupted,
       stoppedReason,
     };
-    const human = ctx.globals.json
+    const human = streamJsonLines
       ? ''
       : [
           heading('事件流结束'),

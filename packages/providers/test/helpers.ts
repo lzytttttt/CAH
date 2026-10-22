@@ -43,6 +43,36 @@ export interface FakeServer {
   close(): Promise<void>;
 }
 
+async function listenOnEphemeralLoopbackPort(server: ReturnType<typeof createServer>): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onError = (error: Error): void => {
+          server.off('listening', onListening);
+          reject(error);
+        };
+        const onListening = (): void => {
+          server.off('error', onError);
+          resolve();
+        };
+        server.once('error', onError);
+        server.once('listening', onListening);
+        server.listen(0, '127.0.0.1');
+      });
+      return;
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      // Rapid repeated local test runs can transiently exhaust the Windows
+      // ephemeral port range; retry briefly instead of failing unrelated tests.
+      if ((code === 'EADDRINUSE' || code === 'EADDRNOTAVAIL' || code === 'EACCES') && attempt < 9) {
+        await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
 export async function startFakeServer(handler: FakeHandler): Promise<FakeServer> {
   const requests: RecordedRequest[] = [];
   const server = createServer((request, response) => {
@@ -85,7 +115,7 @@ export async function startFakeServer(handler: FakeHandler): Promise<FakeServer>
       });
     });
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await listenOnEphemeralLoopbackPort(server);
   const address = server.address() as AddressInfo;
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,

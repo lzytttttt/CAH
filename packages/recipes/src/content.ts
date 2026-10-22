@@ -14,7 +14,6 @@ import {
   type MarkdownContent,
   type ModuleContent,
   type ModuleKind,
-  type RecipeRunOutput,
 } from '@ca/contracts';
 import {
   canonicalJsonHash,
@@ -32,6 +31,7 @@ import {
   type TableData,
 } from '@ca/tools';
 import { RecipeRuntimeError, errorMessage } from './errors';
+import type { RecipeRunOutput } from './types';
 
 export function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -192,7 +192,8 @@ export function coerceModuleContent(
   if (isModuleContent(value) && value.kind === moduleKind) {
     content = parseContent(value, artifactName);
   } else if (isTableData(value) || hasTableWrapper(value)) {
-    content = contentFromTable(value as never, moduleKind);
+    const table = coerceTable(value, { format: 'csv' });
+    content = contentFromTableForKind(table, moduleKind);
   } else if (isModuleContent(value)) {
     // Wrong kind: report the mismatch instead of silently reinterpreting data.
     throw new RecipeRuntimeError(

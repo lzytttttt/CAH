@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { encodeSseEvent, parseSseText } from '../src/sse';
+import { encodeSseEvent, parseSse, parseSseText } from '../src/sse';
 
 describe('SSE parser', () => {
   it('parses id/event/data fields, comments and multi-line data', async () => {
@@ -38,7 +38,7 @@ describe('SSE parser', () => {
       },
     });
     const messages: Array<Record<string, unknown>> = [];
-    for await (const message of (await import('../src/sse')).parseSse(stream)) messages.push(message as unknown as Record<string, unknown>);
+    for await (const message of parseSse(stream)) messages.push(message as unknown as Record<string, unknown>);
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({ id: '7', event: 'step.started', data: '{"x":1}' });
   });

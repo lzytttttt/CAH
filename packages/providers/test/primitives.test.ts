@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_PROVIDER_TIMEOUTS,
   PROVIDERS_PACKAGE_VERSION,
   SseDecoder,
   classifyHttpStatus,
@@ -177,6 +178,14 @@ describe('error mapping and sanitization', () => {
 });
 
 describe('package exports', () => {
+  it('exposes the design timeout defaults', () => {
+    expect(DEFAULT_PROVIDER_TIMEOUTS).toEqual({
+      firstEventTimeoutMs: 30_000,
+      idleTimeoutMs: 45_000,
+      totalTimeoutMs: 180_000,
+    });
+  });
+
   it('exposes the frozen ProviderPackageExports port implementation', () => {
     expect(PROVIDERS_PACKAGE_VERSION).toBe('0.1.0');
     expect(typeof providerPackageExports.createAdapter).toBe('function');

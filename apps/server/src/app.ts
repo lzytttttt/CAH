@@ -39,7 +39,6 @@ export async function createApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: config.logLevel },
     bodyLimit: 2 * 1024 * 1024,
-    disableRequestLogging: true,
     trustProxy: false,
   });
   const log = (message: string, details?: Record<string, unknown>) => {

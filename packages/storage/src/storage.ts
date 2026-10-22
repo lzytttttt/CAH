@@ -181,9 +181,20 @@ export interface RunLeaseRecord {
   expiresAt: number;
 }
 
+const TERMINAL_RUN_STATES = ['COMPLETED', 'CANCELLED', 'FAILED'] as const;
 /** CREATED runs are queued, not yet executing: they do not count as active. */
-const NON_ACTIVE_RUN_STATES = ['CREATED', 'COMPLETED', 'CANCELLED', 'FAILED'] as const;
+const NON_ACTIVE_RUN_STATES = ['CREATED', ...TERMINAL_RUN_STATES] as const;
 const DEFAULT_EVENT_PAGE_SIZE = 200;
+/**
+ * Hard safety bound for a single `eventsAfter` read. The transport/API layer
+ * enforces the public page size (LIMITS.maxEventPageSize = 500); storage allows
+ * larger internal reads because snapshot/export projections legitimately stream
+ * a whole task event log in one call, and silently truncating it would corrupt a
+ * projection. Callers above this bound must paginate.
+ */
+const MAX_EVENT_READ = 50_000;
+/** Hard bound for a single tool-invocation/span listing read. */
+const MAX_LIST_READ = 2_000;
 
 /* ------------------------------------------------------------------ */
 /* tiny SQL helpers                                                    */
@@ -316,8 +327,9 @@ export class SqliteStorage implements StoragePort {
     runMigrations(this.db);
     this.ensureWorkspaceRowSync();
     this.objects = new FileObjectStore(path.join(this.modeDir, 'objects'));
-    // Remove temp files from an interrupted write; best effort, never fatal.
-    void this.objects.sweepTempFiles().catch(() => undefined);
+    // Synchronous startup sweep: reclaim temp files left by a crashed write.
+    // Runs before any put/get this instance performs, so it cannot race them.
+    this.objects.sweepTempFilesSync();
   }
 
   /* ------------------------------------------------------------------ */
@@ -652,6 +664,12 @@ export class SqliteStorage implements StoragePort {
         `source ${source.id} version ${source.version} references object ${source.hash} which is missing from the store`,
       );
     }
+    if (sha256Hex(object.bytes) !== source.hash) {
+      throw new StorageError(
+        'object_corrupt',
+        `source ${source.id} version ${source.version} object content does not match its recorded hash`,
+      );
+    }
     return { source, content: object.bytes };
   }
 
@@ -719,7 +737,7 @@ export class SqliteStorage implements StoragePort {
 
   async listSpans(taskId: TaskId, limit = 500): Promise<SourceSpan[]> {
     this.assertOpen();
-    const bounded = Math.max(1, Math.min(Math.trunc(limit), 2000));
+    const bounded = Number.isFinite(limit) ? Math.max(1, Math.min(Math.trunc(limit), MAX_LIST_READ)) : 500;
     return sqlAll(
       this.db,
       `SELECT sp.* FROM source_spans sp
@@ -785,9 +803,25 @@ export class SqliteStorage implements StoragePort {
   async insertRun(run: Run): Promise<void> {
     this.assertOpen();
     const normalized = RunSchema.parse(run);
+    if (normalized.mode !== this.mode) {
+      throw new StateNotAllowedError(
+        `run ${normalized.id} belongs to ${normalized.mode} mode but this database is ${this.mode}; demo and live runs never mix`,
+      );
+    }
     return this.transaction(async () => {
-      if (!this.taskRowSync(normalized.taskId)) {
+      const taskRow = this.taskRowSync(normalized.taskId);
+      if (!taskRow) {
         throw new StorageError('not_found', `task ${normalized.taskId} does not exist for run ${normalized.id}`);
+      }
+      const task = taskFromRow(taskRow);
+      const moduleRow = this.moduleRowSync(normalized.moduleId);
+      if (!moduleRow) {
+        throw new StorageError('not_found', `module ${normalized.moduleId} does not exist for run ${normalized.id}`);
+      }
+      if (rowString(moduleRow, 'artifact_id') !== task.artifactId) {
+        throw new StateNotAllowedError(
+          `run ${normalized.id} targets module ${normalized.moduleId} which is not part of task ${task.id}`,
+        );
       }
       insertRow(this.db, 'runs', runToRow(normalized));
     });
@@ -802,6 +836,11 @@ export class SqliteStorage implements StoragePort {
   async updateRun(run: Run, expectedRevision?: number): Promise<Run> {
     this.assertOpen();
     const normalized = RunSchema.parse(run);
+    if (normalized.mode !== this.mode) {
+      throw new StateNotAllowedError(
+        `run ${normalized.id} belongs to ${normalized.mode} mode but this database is ${this.mode}`,
+      );
+    }
     return this.transaction(async () => {
       const existing = this.runRowSync(normalized.id);
       if (!existing) throw new StorageError('not_found', `run ${normalized.id} does not exist`);
@@ -846,16 +885,26 @@ export class SqliteStorage implements StoragePort {
 
   async listQueuedRuns(): Promise<Run[]> {
     this.assertOpen();
+    // A queued run is any non-terminal run carrying a visible queue position; it
+    // may be CREATED (plan not finished) or READY (plan committed, waiting for
+    // global capacity). The server scheduler only launches READY entries.
     return sqlAll(
       this.db,
-      `SELECT * FROM runs WHERE state = 'CREATED'
-       ORDER BY CASE WHEN queue_position IS NULL THEN 1 ELSE 0 END, queue_position ASC, created_at ASC, rowid ASC`,
+      `SELECT * FROM runs WHERE queue_position IS NOT NULL
+         AND state NOT IN (${TERMINAL_RUN_STATES.map(() => '?').join(', ')})
+       ORDER BY queue_position ASC, created_at ASC, rowid ASC`,
+      [...TERMINAL_RUN_STATES],
     ).map(runFromRow);
   }
 
   async updateRunStateIfRevision(runId: string, expectedRevision: number, next: Run): Promise<Run> {
     this.assertOpen();
     const normalized = RunSchema.parse(next);
+    if (normalized.mode !== this.mode) {
+      throw new StateNotAllowedError(
+        `run ${normalized.id} belongs to ${normalized.mode} mode but this database is ${this.mode}`,
+      );
+    }
     return this.transaction(async () => {
       const existing = this.runRowSync(runId);
       if (!existing) throw new StorageError('not_found', `run ${runId} does not exist`);
@@ -947,6 +996,7 @@ export class SqliteStorage implements StoragePort {
       if (!this.taskRowSync(normalized.taskId)) {
         throw new StorageError('not_found', `task ${normalized.taskId} does not exist for blocker ${normalized.id}`);
       }
+      this.requireRunForTaskSync(normalized.runId, normalized.taskId);
       insertRow(this.db, 'blockers', blockerToRow(normalized));
     });
   }
@@ -980,6 +1030,7 @@ export class SqliteStorage implements StoragePort {
       if (!this.taskRowSync(normalized.taskId)) {
         throw new StorageError('not_found', `task ${normalized.taskId} does not exist for decision ${normalized.id}`);
       }
+      this.requireRunForTaskSync(normalized.runId, normalized.taskId);
       insertRow(this.db, 'decisions', decisionToRow(normalized));
     });
   }
@@ -1002,6 +1053,7 @@ export class SqliteStorage implements StoragePort {
       if (!this.taskRowSync(normalized.taskId)) {
         throw new StorageError('not_found', `task ${normalized.taskId} does not exist for patch ${normalized.id}`);
       }
+      this.requireRunForTaskSync(normalized.runId, normalized.taskId);
       insertRow(this.db, 'patches', patchToRow(normalized));
     });
   }
@@ -1035,6 +1087,7 @@ export class SqliteStorage implements StoragePort {
       if (!this.taskRowSync(normalized.taskId)) {
         throw new StorageError('not_found', `task ${normalized.taskId} does not exist for validation report ${normalized.id}`);
       }
+      this.requireRunForTaskSync(normalized.runId, normalized.taskId);
       insertRow(this.db, 'validation_reports', validationReportToRow(normalized));
     });
   }
@@ -1063,6 +1116,7 @@ export class SqliteStorage implements StoragePort {
       if (!this.taskRowSync(normalized.taskId)) {
         throw new StorageError('not_found', `task ${normalized.taskId} does not exist for context snapshot ${normalized.id}`);
       }
+      this.requireRunForTaskSync(normalized.runId, normalized.taskId);
       insertRow(this.db, 'context_snapshots', contextSnapshotToRow(normalized));
     });
   }
@@ -1220,10 +1274,10 @@ export class SqliteStorage implements StoragePort {
   async eventsAfter(taskId: TaskId, seq: number, limit?: number): Promise<HarnessEvent[]> {
     this.assertOpen();
     const after = Number.isFinite(seq) ? Math.max(0, Math.trunc(seq)) : 0;
-    const pageSize = Math.max(
-      1,
-      Math.min(Math.trunc(limit ?? DEFAULT_EVENT_PAGE_SIZE), LIMITS.maxEventPageSize),
-    );
+    const requested = limit ?? DEFAULT_EVENT_PAGE_SIZE;
+    const pageSize = Number.isFinite(requested)
+      ? Math.max(1, Math.min(Math.trunc(requested), MAX_EVENT_READ))
+      : DEFAULT_EVENT_PAGE_SIZE;
     return sqlAll(
       this.db,
       'SELECT * FROM events WHERE task_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?',
@@ -1535,6 +1589,12 @@ export class SqliteStorage implements StoragePort {
       throw new StateNotAllowedError('resetDemoData is only allowed for the demo database; live data is never reset');
     }
     await this.withWriteLock(async () => {
+      // Preserve the workspace identity/settings across the reset: callers (the
+      // demo seeder, an open UI session) hold the workspace id and a reset must
+      // not invalidate it. Only business data, events, leases and objects go.
+      const workspaceRow = this.requireWorkspaceRowSync();
+      const workspace = workspaceFromRow(workspaceRow);
+      const workspaceRevision = rowNumber(workspaceRow, 'revision');
       try {
         this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
       } catch {
@@ -1548,7 +1608,7 @@ export class SqliteStorage implements StoragePort {
       mkdirSync(path.join(this.modeDir, 'objects'), { recursive: true });
       this.db = this.openDatabase();
       runMigrations(this.db);
-      this.ensureWorkspaceRowSync();
+      insertRow(this.db, 'workspace', workspaceToRow(workspace, workspaceRevision));
     });
   }
 
@@ -1846,6 +1906,16 @@ export class SqliteStorage implements StoragePort {
 
   private patchRowSync(patchId: string): SqlRow | undefined {
     return sqlGet(this.db, 'SELECT * FROM patches WHERE id = ?', [patchId]);
+  }
+
+  /** A run may only reference objects of the task that owns it. */
+  private requireRunForTaskSync(runId: string, taskId: string): void {
+    const row = this.runRowSync(runId);
+    if (!row) throw new StorageError('not_found', `run ${runId} does not exist`);
+    const owner = rowString(row, 'task_id');
+    if (owner !== taskId) {
+      throw new StateNotAllowedError(`run ${runId} belongs to task ${owner}, not ${taskId}`);
+    }
   }
 
   private leaseRowSync(runId: string): SqlRow | undefined {

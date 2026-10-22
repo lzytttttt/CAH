@@ -53,6 +53,18 @@ describe('migrations + storage layout', () => {
     ]) {
       expect(tables).toContain(expected);
     }
+
+    // Artifact versions are protected at the database level, not only in code.
+    const triggers = storage
+      .rawQuery("SELECT name FROM sqlite_master WHERE type = 'trigger' ORDER BY name")
+      .map((row) => String(row['name']));
+    expect(triggers).toContain('trg_artifact_versions_no_update');
+    expect(triggers).toContain('trg_artifact_versions_no_delete');
+
+    // Objects live under <modeDir>/objects/<hash[0..2]>/<hash>.
+    const hash = 'c'.repeat(64);
+    expect(storage.objects.root).toBe(path.join(modeDir, 'objects'));
+    expect(storage.objects.pathFor(hash)).toBe(path.join(modeDir, 'objects', hash.slice(0, 2), hash));
   });
 
   it('is idempotent: reopening the same directory keeps one migration row and the same workspace', async () => {

@@ -19,7 +19,7 @@
  * path are rejected instead of followed.
  */
 import { createHash } from 'node:crypto';
-import { constants as fsConstants } from 'node:fs';
+import { constants as fsConstants, readdirSync, rmSync, statSync } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { LIMITS } from '@ca/contracts';
@@ -44,6 +44,15 @@ export interface StoredObjectInfo {
   sizeBytes: number;
   mime: string;
   path: string;
+}
+
+export interface SweepOptions {
+  /**
+   * Only delete temp files older than this many milliseconds. `init()` uses a
+   * generous age so a concurrent writer in another process is never harmed; an
+   * explicit maintenance call defaults to 0 (delete all leftovers).
+   */
+  minAgeMs?: number;
 }
 
 let tempCounter = 0;
@@ -88,16 +97,23 @@ export class FileObjectStore implements ObjectStorePort {
     this.fsyncEnabled = options.fsync ?? true;
   }
 
-  /** Create the store root. Called by openStorage; also safe to call directly in tests. */
+  /** Create the store root and clean up temp files from interrupted writes. */
   async init(): Promise<void> {
     await fs.mkdir(this.root, { recursive: true });
     this.initialised = true;
+    // Only reclaim temp files that cannot belong to an in-flight write.
+    await this.sweepTempFiles({ minAgeMs: 5 * 60_000 });
   }
 
-  /** Delete leftover temp files from interrupted writes (called on init).
-   * Temp files are created in the shard directory next to the final object, so
-   * both the store root and every two-character shard directory are swept. */
-  async sweepTempFiles(): Promise<number> {
+  /**
+   * Delete leftover temp files from interrupted writes (called at startup and by
+   * maintenance tooling). Temp files are created in the shard directory next to
+   * the final object, so both the store root and every two-character shard
+   * directory are swept. By default, in-flight temp files are skipped by age so a
+   * concurrent writer is never corrupted.
+   */
+  async sweepTempFiles(options: SweepOptions = {}): Promise<number> {
+    const minAgeMs = options.minAgeMs ?? 0;
     let removed = 0;
     const sweepDirectory = async (dir: string): Promise<void> => {
       let entries: string[];
@@ -109,8 +125,13 @@ export class FileObjectStore implements ObjectStorePort {
       }
       for (const entry of entries) {
         if (!entry.startsWith(TEMP_PREFIX)) continue;
+        const filePath = path.join(dir, entry);
+        if (minAgeMs > 0) {
+          const stat = await fs.stat(filePath).catch(() => null);
+          if (!stat || Date.now() - stat.mtimeMs < minAgeMs) continue;
+        }
         try {
-          await fs.rm(path.join(dir, entry), { force: true });
+          await fs.rm(filePath, { force: true });
           removed += 1;
         } catch {
           /* best effort */
@@ -128,6 +149,47 @@ export class FileObjectStore implements ObjectStorePort {
     for (const shard of shards) {
       if (shard.length !== 2 || !/^[0-9a-f]{2}$/.test(shard)) continue;
       await sweepDirectory(path.join(this.root, shard));
+    }
+    return removed;
+  }
+
+  /**
+   * Synchronous variant used by the storage constructor (which is synchronous).
+   * Safe at startup because no write from this store is in flight yet.
+   */
+  sweepTempFilesSync(): number {
+    let removed = 0;
+    const scan = (dir: string): void => {
+      let entries: string[];
+      try {
+        entries = readdirSync(dir);
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (!entry.startsWith(TEMP_PREFIX)) continue;
+        const filePath = path.join(dir, entry);
+        try {
+          const stat = statSync(filePath);
+          if (stat.isFile()) {
+            rmSync(filePath, { force: true });
+            removed += 1;
+          }
+        } catch {
+          /* best effort */
+        }
+      }
+    };
+    scan(this.root);
+    let shards: string[] = [];
+    try {
+      shards = readdirSync(this.root);
+    } catch {
+      return removed;
+    }
+    for (const shard of shards) {
+      if (shard.length !== 2 || !/^[0-9a-f]{2}$/.test(shard)) continue;
+      scan(path.join(this.root, shard));
     }
     return removed;
   }

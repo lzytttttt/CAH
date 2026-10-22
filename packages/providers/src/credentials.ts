@@ -104,7 +104,7 @@ function describeCredentialError(error: unknown): string {
   return 'credential store operation failed';
 }
 
-function mapFileReadError(error: unknown, maxBytes: number): CredentialStoreError {
+function mapFileReadError(error: unknown): CredentialStoreError {
   const code = error && typeof error === 'object' ? String((error as { code?: unknown }).code ?? '') : '';
   if (code === 'ENOENT' || code === 'ENOTDIR') {
     return new CredentialStoreError('read_error', 'credential key file does not exist or is not readable');
@@ -115,7 +115,6 @@ function mapFileReadError(error: unknown, maxBytes: number): CredentialStoreErro
   if (code === 'EFBIG' || code === 'EISDIR') {
     return new CredentialStoreError('read_error', 'credential key file has an invalid type or size');
   }
-  void maxBytes;
   return new CredentialStoreError('read_error', `failed to read credential key file${code ? ` (${code})` : ''}`);
 }
 
@@ -178,7 +177,7 @@ export class EnvCredentialStore implements CredentialStore {
     try {
       info = await this.#fs.stat(filePath);
     } catch (error) {
-      throw mapFileReadError(error, this.#maxFileBytes);
+      throw mapFileReadError(error);
     }
     if (!info.isFile()) {
       throw new CredentialStoreError('read_error', 'credential key file is not a regular file');
@@ -200,7 +199,7 @@ export class EnvCredentialStore implements CredentialStore {
     try {
       raw = await this.#fs.readFile(filePath);
     } catch (error) {
-      throw mapFileReadError(error, this.#maxFileBytes);
+      throw mapFileReadError(error);
     }
     if (Buffer.byteLength(raw, 'utf8') > this.#maxFileBytes) {
       throw new CredentialStoreError('too_large', 'credential key file exceeds the maximum allowed size');

@@ -410,6 +410,11 @@ export function renderValidationReport(report: ValidationReport, indent = ''): s
     `${indent}  验证器：${report.validatorVersion} · ${report.createdAt}`,
   ];
   if (report.summary) lines.push(`${indent}  摘要：${truncate(report.summary, 400)}`);
+  lines.push(`${indent}  检查明细：`);
+  for (const check of report.checks.slice(0, 20)) {
+    lines.push(`${indent}    [${check.layer}/${check.code}] ${checkStatusLabel(check.status)} ${check.title}${check.status === 'pass' || check.status === 'not_applicable' ? '' : `：${truncate(check.detail, 300)}`}`);
+  }
+  if (report.checks.length > 20) lines.push(`${indent}    … 其余 ${report.checks.length - 20} 项检查未显示`);
   const findings = report.checks.filter((check) => check.layer !== 'L4' && (check.status === 'fail' || check.status === 'needs_review'));
   if (findings.length) {
     lines.push(`${indent}  阻断项：`);

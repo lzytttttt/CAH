@@ -28,17 +28,21 @@ export type ProviderScript =
 export interface FakeProviderOptions {
   profile?: Partial<ProviderProfile>;
   capabilities?: Partial<ProviderCapabilities>;
+  /** When true the gateway behaves as if no provider profile were configured. */
+  disabled?: boolean;
 }
 
 export class FakeProviderGateway implements ProviderGateway {
   readonly profile: ProviderProfile;
   readonly capabilitiesValue: ProviderCapabilities;
+  readonly disabled: boolean;
   readonly scripts: ProviderScript[] = [];
   readonly requests: ModelRequest[] = [];
   readonly abortedRequests: number[] = [];
   closed = false;
 
   constructor(options: FakeProviderOptions = {}) {
+    this.disabled = options.disabled ?? false;
     const now = '2026-01-01T00:00:00.000Z';
     this.profile = {
       id: '00000000-0000-4000-8000-0000000000aa' as never,
@@ -117,11 +121,12 @@ export class FakeProviderGateway implements ProviderGateway {
   }
 
   async getProfile(profileId: string): Promise<ProviderProfile | null> {
+    if (this.disabled) return null;
     return profileId === this.profile.id ? this.profile : null;
   }
 
   async listEnabledProfiles(): Promise<ProviderProfile[]> {
-    return [this.profile];
+    return this.disabled ? [] : [this.profile];
   }
 
   async capabilities(): Promise<ProviderCapabilities> {

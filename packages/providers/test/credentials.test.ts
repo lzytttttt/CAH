@@ -125,6 +125,13 @@ describe('EnvCredentialStore', () => {
     expect((await store.get('CA_TEST_PROVIDER_KEY'))?.value).toBe(TEST_CREDENTIAL);
   });
 
+  it('rejects credentials containing control characters or newlines', async () => {
+    const store = new EnvCredentialStore({ env: { CA_TEST_PROVIDER_KEY: 'line\nbreak' } });
+    await expect(store.get('CA_TEST_PROVIDER_KEY')).rejects.toMatchObject({ code: 'invalid_value' });
+    const controlStore = new EnvCredentialStore({ env: { CA_TEST_PROVIDER_KEY: 'abc\u0000def' } });
+    await expect(controlStore.get('CA_TEST_PROVIDER_KEY')).rejects.toMatchObject({ code: 'invalid_value' });
+  });
+
   it('never exposes the secret in status error text', async () => {
     const keyPath = join(directory, 'bad.key');
     await writeFile(keyPath, '', 'utf8');

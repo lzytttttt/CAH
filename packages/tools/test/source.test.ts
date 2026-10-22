@@ -1,6 +1,5 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  type JsonValue,
   type SearchHit,
   type SourceListResult,
   type SourceReadResult,
@@ -304,7 +303,7 @@ describe('source.search', () => {
   it('does not fabricate hits for absent terms', async () => {
     const world = makeWorld();
     const result = succeededData<SourceSearchResult>(
-      await call(world, 'source.search', { query: 'totally-absent-term' as JsonValue as string }),
+      await call(world, 'source.search', { query: 'totally-absent-term' }),
     );
     expect(result.hits).toEqual([]);
     expect(world.calls.saveSpan).toBe(0);

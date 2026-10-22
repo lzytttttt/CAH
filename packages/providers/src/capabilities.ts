@@ -239,11 +239,7 @@ function errorDetailFrom(event: ModelEvent | undefined, thrown: ProviderError | 
   return null;
 }
 
-function classifyRejection(
-  error: ProviderErrorDetail,
-  featurePattern: RegExp,
-  featureName: string,
-): CapabilityProbe['status'] {
+function classifyRejection(error: ProviderErrorDetail, featurePattern: RegExp): CapabilityProbe['status'] {
   if (error.code === 'unsupported_feature') return 'unsupported';
   if (error.code === 'bad_request' || error.code === 'refused') {
     // The provider explicitly rejected the request. Only claim `unsupported`
@@ -252,7 +248,6 @@ function classifyRejection(
     if (featurePattern.test(error.message)) return 'unsupported';
     return 'error';
   }
-  void featureName;
   return 'error';
 }
 
@@ -300,7 +295,7 @@ function analyzeProbe(
     }
     case 'streaming': {
       if (error) {
-        return classifyRejection(error, /stream|sse|event[- ]?stream/i, 'streaming') === 'unsupported'
+        return classifyRejection(error, /stream|sse|event[- ]?stream/i) === 'unsupported'
           ? unsupported(`provider rejected streaming: ${error.message}`)
           : failed(`streaming probe failed: ${error.message}`);
       }
@@ -316,7 +311,7 @@ function analyzeProbe(
     }
     case 'tool_calling': {
       if (error) {
-        const status = classifyRejection(error, /tool|function/i, 'tool calling');
+        const status = classifyRejection(error, /tool|function/i);
         return status === 'unsupported'
           ? unsupported(`provider rejected native tool calling: ${error.message}`)
           : failed(`tool calling probe failed: ${error.message}`);
@@ -340,7 +335,7 @@ function analyzeProbe(
     }
     case 'structured_output': {
       if (error) {
-        const status = classifyRejection(error, /response[_-]?format|json[_-]?schema|structured|schema/i, 'structured output');
+        const status = classifyRejection(error, /response[_-]?format|json[_-]?schema|structured|schema/i);
         return status === 'unsupported'
           ? unsupported(`provider rejected structured output: ${error.message}`)
           : failed(`structured output probe failed: ${error.message}`);
@@ -358,7 +353,7 @@ function analyzeProbe(
     }
     case 'usage': {
       if (error) {
-        const status = classifyRejection(error, /usage|stream_options|include_usage|token/i, 'usage reporting');
+        const status = classifyRejection(error, /usage|stream_options|include_usage|token/i);
         return status === 'unsupported'
           ? unsupported(`provider rejected the usage probe: ${error.message}`)
           : failed(`usage probe failed: ${error.message}`);

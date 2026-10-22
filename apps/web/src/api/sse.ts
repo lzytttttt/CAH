@@ -174,8 +174,11 @@ export function createEventStreamTracker(afterSeq = 0): {
       }
       if (seq > state.lastSeq + 1 && state.lastSeq > 0) {
         state.gaps.push(state.lastSeq + 1);
-        // Do not apply the isolated event: the caller must refetch first.
-        return { kind: 'gap', fromSeq: state.lastSeq + 1, toSeq: seq - 1 };
+        // The caller refetches the authoritative snapshot (which supersedes the
+        // missing events), so resume right before this event instead of
+        // reporting the same gap forever on every reconnect.
+        state.lastSeq = seq - 1;
+        return { kind: 'gap', fromSeq: state.gaps[state.gaps.length - 1]!, toSeq: seq - 1 };
       }
       state.lastSeq = seq;
       state.lastEventId = frameId ?? seq;

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import type { TransformOperation } from '@ca/contracts';
 import {
   TableTransformError,
@@ -27,8 +27,14 @@ function sampleTable(): TableData {
   };
 }
 
-function run(operations: readonly TransformOperation[], table: TableData = sampleTable()) {
-  return applyTransformOperations(table, operations);
+function applyRaw(table: TableData, operations: readonly unknown[], options?: { maxIssues?: number }) {
+  // The pure API also accepts raw operator objects without schema defaults;
+  // callers in these tests intentionally exercise that path as well.
+  return applyTransformOperations(table, operations as readonly TransformOperation[], options);
+}
+
+function run(operations: readonly unknown[], table: TableData = sampleTable()) {
+  return applyRaw(table, operations);
 }
 
 function failure(fn: () => unknown): TableTransformError {
@@ -135,7 +141,7 @@ describe('sort', () => {
         { k: 'a', n: '3' },
       ],
     };
-    const { table: sorted } = applyTransformOperations(table, [{ op: 'sort', column: 'k' }]);
+    const { table: sorted } = applyRaw(table, [{ op: 'sort', column: 'k' }]);
     expect(sorted.rows.map((row) => row.n)).toEqual(['2', '3', '1']);
   });
 
@@ -174,12 +180,12 @@ describe('normalize / cast / fill', () => {
       columns: [{ key: 'v', label: 'v' }],
       rows: [{ v: '  HELLO   world  ' }, { v: '"quoted"' }, { v: 'N/A' }, { v: null }],
     };
-    const normalized = applyTransformOperations(table, [
+    const normalized = applyRaw(table, [
       { op: 'normalize', column: 'v', transforms: ['trim', 'lower', 'collapse_space'], nullTokens: ['N/A'] },
     ]).table;
     expect(normalized.rows.map((row) => row.v)).toEqual(['hello world', '"quoted"', null, null]);
 
-    const quotes = applyTransformOperations(table, [
+    const quotes = applyRaw(table, [
       { op: 'normalize', column: 'v', transforms: ['strip_quotes'] },
     ]).table;
     expect(quotes.rows[1]!.v).toBe('quoted');
@@ -202,7 +208,7 @@ describe('normalize / cast / fill', () => {
       columns: [{ key: 'n', label: 'n' }],
       rows: [{ n: 'abc' }, { n: '12' }],
     };
-    const result = applyTransformOperations(table, [{ op: 'cast', column: 'n', to: 'number', strict: false }]);
+    const result = applyRaw(table, [{ op: 'cast', column: 'n', to: 'number', strict: false }]);
     expect(result.table.rows.map((row) => row.n)).toEqual([null, 12]);
     expect(result.issues).toHaveLength(1);
     expect(result.issues[0]).toContain('not a number');
@@ -210,7 +216,7 @@ describe('normalize / cast / fill', () => {
 
   it('throws on strict cast failures', () => {
     const table: TableData = { columns: [{ key: 'n', label: 'n' }], rows: [{ n: 'abc' }] };
-    expect(failure(() => applyTransformOperations(table, [{ op: 'cast', column: 'n', to: 'number', strict: true }])).code).toBe(
+    expect(failure(() => applyRaw(table, [{ op: 'cast', column: 'n', to: 'number', strict: true }])).code).toBe(
       'cast_failed',
     );
   });
@@ -289,7 +295,7 @@ describe('map / limit / require', () => {
       columns: [{ key: 'n', label: 'n' }],
       rows: Array.from({ length: 5 }, () => ({ n: 'bad' })),
     };
-    const result = applyTransformOperations(table, [{ op: 'cast', column: 'n', to: 'number' }], { maxIssues: 2 });
+    const result = applyRaw(table, [{ op: 'cast', column: 'n', to: 'number' }], { maxIssues: 2 });
     expect(result.issues).toHaveLength(2);
     expect(result.issues[1]).toContain('more data issue(s) were omitted');
   });
@@ -297,13 +303,13 @@ describe('map / limit / require', () => {
 
 describe('determinism and immutability', () => {
   it('produces identical output and hashes on repeated runs', () => {
-    const operations: TransformOperation[] = [
+    const operations: readonly unknown[] = [
       { op: 'rename', mapping: { status: 'state' } },
       { op: 'normalize', column: 'state', transforms: ['trim', 'lower'] },
       { op: 'dedupe', keys: ['id'], keep: 'last' },
     ];
-    const first = applyTransformOperations(sampleTable(), operations);
-    const second = applyTransformOperations(sampleTable(), operations);
+    const first = applyRaw(sampleTable(), operations);
+    const second = applyRaw(sampleTable(), operations);
     expect(second.table).toEqual(first.table);
     expect(second.issues).toEqual(first.issues);
     expect(canonicalJsonHash(tableToJsonValue(second.table))).toBe(canonicalJsonHash(tableToJsonValue(first.table)));
@@ -312,7 +318,7 @@ describe('determinism and immutability', () => {
   it('never mutates the input table', () => {
     const input = sampleTable();
     const snapshot = JSON.parse(JSON.stringify(input)) as TableData;
-    applyTransformOperations(input, [
+    applyRaw(input, [
       { op: 'normalize', column: 'name', transforms: ['trim', 'lower'] },
       { op: 'cast', column: 'qty', to: 'number' },
       { op: 'sort', column: 'qty', numeric: true },
@@ -333,7 +339,7 @@ describe('determinism and immutability', () => {
         { sys_id: 's-1', name: 'A2', status: 'ACTIVE' },
       ],
     };
-    const result = applyTransformOperations(table, [
+    const result = applyRaw(table, [
       { op: 'rename', mapping: { sys_id: 'system_id' } },
       { op: 'normalize', column: 'system_id', transforms: ['trim', 'lower'] },
       { op: 'normalize', column: 'status', transforms: ['trim', 'lower'] },

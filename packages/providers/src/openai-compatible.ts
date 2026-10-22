@@ -138,7 +138,8 @@ export function buildChatCompletionsUrl(baseURL: string): string {
   }
   const path = parsed.pathname.replace(/\/+$/, '');
   parsed.pathname = path.endsWith('/chat/completions') ? path : `${path}/chat/completions`;
-  parsed.search = '';
+  // Keep query parameters: Azure-style endpoints require `?api-version=...` and
+  // other OpenAI-compatible gateways use query-based routing.
   parsed.hash = '';
   return parsed.toString();
 }
@@ -451,7 +452,7 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
       // JSON document. Emit its content honestly as one delta (never fake a
       // token-by-token stream) — capability probes will notice the missing
       // progressive chunks.
-      yield* this.#streamCompletedJsonPayload(response, request, runtime, externalSignal, accumulator);
+      yield* this.#streamCompletedJsonPayload(response, runtime, externalSignal, accumulator);
       return;
     }
 
@@ -666,7 +667,6 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
 
   async *#streamCompletedJsonPayload(
     response: Response,
-    request: ModelRequest,
     runtime: RequestRuntime,
     externalSignal: AbortSignal,
     accumulator: RequestAccumulator,
@@ -681,7 +681,7 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
     });
     if (apiError) throw apiError;
     accumulator.terminalEmitted = true;
-    for (const event of eventsFromCompletedPayload(payload, request, accumulator, this.profile)) yield event;
+    for (const event of eventsFromCompletedPayload(payload, accumulator, this.profile)) yield event;
   }
 
   /* --------------------------- non-streaming ------------------------- */
@@ -704,7 +704,7 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
     });
     if (apiError) throw apiError;
     accumulator.terminalEmitted = true;
-    for (const event of eventsFromCompletedPayload(payload, request, accumulator, this.profile)) yield event;
+    for (const event of eventsFromCompletedPayload(payload, accumulator, this.profile)) yield event;
   }
 
   /* ----------------------------- HTTP layer -------------------------- */
@@ -1253,7 +1253,6 @@ function buildFailureTerminalEvents(accumulator: RequestAccumulator, profile: Pr
  */
 function eventsFromCompletedPayload(
   payload: unknown,
-  request: ModelRequest,
   accumulator: RequestAccumulator,
   profile: ProviderProfile,
 ): ModelEvent[] {
@@ -1344,7 +1343,6 @@ function eventsFromCompletedPayload(
   accumulator.doneSeen = true;
 
   events.push(...finalizeStreamEvents(accumulator, profile));
-  void request;
   return events;
 }
 

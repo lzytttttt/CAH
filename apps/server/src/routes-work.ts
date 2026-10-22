@@ -4,6 +4,7 @@ import {
   AcceptPatchRequestSchema,
   CommitPlanRequestSchema,
   CreateRecipeRequestSchema,
+  CreateRunRequestSchema,
   DisableRecipeRequestSchema,
   PatchReviewResponseSchema,
   ProposeRecipeRequestSchema,
@@ -34,6 +35,70 @@ export async function registerWorkRoutes(app: FastifyInstance, deps: WorkRouteDe
   const runtime = (): ModeRuntime => manager.runtime();
 
   /* ---------------------------------- runs ---------------------------------- */
+  app.post(`${API_ROUTES.tasks}/:id/runs`, async (request) => {
+    const taskId = requireParam(request.params as Record<string, string>, 'id');
+    const body = parseBody(CreateRunRequestSchema, request.body);
+    const rt = runtime();
+    return deps.commands.run(body.commandId, 'run.create', taskId as never, async () => {
+      const task = await loadTask(rt.storage, taskId);
+      if (body.expectedRevision !== task.revision) {
+        throw fail.revisionConflict(body.expectedRevision, task.revision);
+      }
+      const aggregate = await rt.storage.getTaskAggregate(task.id);
+      if (!aggregate) throw fail.notFound('任务成果');
+      const module = aggregate.modules.find((m) => m.id === body.moduleId);
+      if (!module) throw fail.validationFailed('目标模块不属于该任务');
+      if (rt.mode === 'demo') {
+        throw fail.stateNotAllowed('演示模式是只读演示，不能发起真实运行；请先切换到 Live 模式。');
+      }
+      const profiles = await rt.providers.listEnabledProfiles();
+      if (profiles.length === 0) {
+        throw fail.provider('未配置可用的模型连接。请在设置中配置并测试连接后再发起运行。');
+      }
+      const handle = await rt.harness.plan({
+        commandId: body.commandId,
+        taskId: task.id,
+        expectedRevision: task.revision,
+        moduleId: body.moduleId,
+        intent: body.intent,
+        planFirst: body.planFirst,
+        budgetOverrides: body.budgetOverrides,
+        sourceIds: body.sourceIds as never,
+        actor: 'local-user',
+      });
+      let state = handle.state;
+      let plan = handle.plan ?? null;
+
+      if (!body.planFirst && state === 'READY') {
+        const detail = await rt.harness.getRunDetail(handle.runId);
+        const contextSnapshotId = detail?.run.contextSnapshotId ?? null;
+        const planVersion = detail?.plan?.version ?? plan?.version ?? 0;
+        if (contextSnapshotId && planVersion > 0) {
+          await rt.harness.commit({
+            commandId: `${body.commandId}:auto-commit`,
+            runId: handle.runId,
+            expectedRevision: task.revision,
+            planVersion,
+            contextSnapshotId,
+            actor: 'local-user',
+          });
+          await rt.scheduler.submit(handle.runId);
+          const latest = await rt.storage.getRun(handle.runId);
+          state = latest?.state ?? state;
+          plan = detail?.plan ?? plan;
+        }
+      }
+      return {
+        commandId: body.commandId,
+        duplicate: false,
+        runId: handle.runId,
+        state,
+        revision: task.revision,
+        plan,
+      };
+    });
+  });
+
   app.get(`${API_ROUTES.runBase}/:id`, async (request) => {
     const runId = requireParam(request.params as Record<string, string>, 'id');
     const rt = runtime();

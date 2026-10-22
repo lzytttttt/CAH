@@ -286,6 +286,7 @@ export async function registerCoreRoutes(app: FastifyInstance, deps: CoreRouteDe
             profile,
             credential: credential.value,
             probes: body.probes,
+            urlPolicy: urlPolicyFor(deps.config),
           })
         ).report;
       } catch (error) {

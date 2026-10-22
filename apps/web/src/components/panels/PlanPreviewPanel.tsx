@@ -281,6 +281,15 @@ export function PlanPreviewPanel({ snapshot, onOpenConstraints, onOpenSources, o
   );
 }
 
+interface RiskCardProps {
+  risk: PlanRisk;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpenConstraints: () => void;
+  onOpenSources: () => void;
+  onFocusModule: (moduleId: string) => void;
+}
+
 function RiskCard({ risk, expanded, onToggle, onOpenConstraints, onOpenSources, onFocusModule }: RiskCardProps): JSX.Element {
   const unresolved = risk.severity === 'blocking' && risk.resolvedByDecisionId === null;
   return (

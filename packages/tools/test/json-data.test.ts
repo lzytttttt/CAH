@@ -76,6 +76,11 @@ describe('tableFromJsonValue', () => {
     expect(issues).toHaveLength(1);
   });
 
+  it('rejects tables with more rows than the contract allows', () => {
+    const tooMany = Array.from({ length: 50_001 }, () => 1);
+    expect(failure(() => tableFromJsonValue(tooMany)).code).toBe('limit_exceeded');
+  });
+
   it('rejects forbidden or overlong keys', () => {
     const polluted = JSON.parse('[{"__proto__":1}]') as never;
     expect(failure(() => tableFromJsonValue(polluted)).code).toBe('json_parse_error');

@@ -116,9 +116,9 @@ export class LiveProviderGateway implements ProviderGateway {
 
   private fetchOptions(): Parameters<typeof createAdapter>[2] {
     return {
-      firstEventTimeoutMs: this.config.providerEnv ? undefined : undefined,
-      idleTimeoutMs: undefined,
-      totalTimeoutMs: undefined,
+      // Internal allow-listed hosts need the policy passed explicitly; the
+      // adapter's default policy only allows HTTPS remote + loopback HTTP.
+      urlPolicy: urlPolicyFor(this.config),
     };
   }
 

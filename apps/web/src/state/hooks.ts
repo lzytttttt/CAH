@@ -7,6 +7,9 @@ import { useViewStore } from './viewStore';
 import type { Route } from '../lib/routes';
 import { navigate, parseHash, routeToHash } from '../lib/routes';
 
+export { useViewStore };
+export type { ViewStore };
+
 /* ------------------------------- core context ------------------------------- */
 
 export const CoreContext = createContext<WorkbenchCore | null>(null);

@@ -83,6 +83,12 @@ describe('run leases with fencing tokens', () => {
     await storage.releaseRunLease(run.id, 'owner-a');
     expect(await storage.listLeaseOwner(run.id)).toBeNull();
     expect(await storage.renewRunLease(run.id, 'owner-a', 60_000)).toBe(false);
+
+    // The fencing token is monotonic across release/re-acquire, so an executor
+    // that only knows the old token can never look current again.
+    expect(await storage.acquireRunLease(run.id, 'owner-c', 60_000)).toBe(true);
+    expect(storage.fencingToken(run.id)).toBe(2);
+    expect(await storage.listLeaseOwner(run.id)).toBe('owner-c');
   });
 
   it('expires stale leases, allows takeover and increments the fencing token', async () => {
@@ -119,7 +125,9 @@ describe('demo reset and physical isolation', () => {
     expect(await storage.objects.listObjects()).toEqual([]);
     const workspaceAfter = await storage.getWorkspace();
     expect(workspaceAfter.mode).toBe('demo');
-    expect(workspaceAfter.id).not.toBe(workspaceBefore.id);
+    // Workspace identity survives a demo reset so open sessions/seeds stay valid.
+    expect(workspaceAfter.id).toBe(workspaceBefore.id);
+    expect(workspaceAfter.settings).toEqual(workspaceBefore.settings);
     expect(storage.schemaVersion()).toBe(1);
 
     // Storage is fully usable after a reset.

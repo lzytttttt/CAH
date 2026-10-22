@@ -518,7 +518,7 @@ function buildSpatial(input: SpatialInput): SpatialProjection {
       kind: 'prospect',
       layer: 'prospect',
       title: prospect.title,
-      status: prospect.state as SpatialNode['status'],
+      status: spatialStatusForProspect(prospect.state),
       summary: prospect.missingInputs.length ? `缺少：${prospect.missingInputs.join('、')}` : '依赖已满足',
       moduleId: prospect.targetModuleId,
       runId: null,
@@ -567,8 +567,27 @@ function buildSpatial(input: SpatialInput): SpatialProjection {
   };
 }
 
-function nodePriority(node: SpatialNode): number {
-  switch (node.kind) {
+/** Prospect lifecycle states are projected onto the spatial status vocabulary. */
+function spatialStatusForProspect(state: ProspectProjection['state']): SpatialNode['status'] {
+  switch (state) {
+    case 'accepted':
+      return 'accepted';
+    case 'stale':
+      return 'stale';
+    case 'missing_inputs':
+      return 'blocked';
+    case 'proposed':
+      return 'idle';
+    case 'ready':
+      return 'warning';
+    case 'generating':
+      return 'running';
+    case 'review':
+      return 'ready_for_review';
+  }
+}
+
+function nodePriority(node: SpatialNode): number {  switch (node.kind) {
     case 'module':
       return 0;
     case 'run':

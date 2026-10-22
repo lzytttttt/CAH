@@ -300,7 +300,7 @@ function checkL1(
         checks.push(...checkCsv(content));
         break;
       case 'json':
-        checks.push(...checkJson(content));
+        checks.push(...checkJson(content, input.candidate));
         break;
     }
   }
@@ -570,9 +570,11 @@ function cellMatchesType(type: CsvColumnLike['type'], value: string | number | b
   }
 }
 
-function checkJson(content: Extract<ModuleContent, { kind: 'json' }>): ValidationCheck[] {
+function checkJson(content: Extract<ModuleContent, { kind: 'json' }>, rawCandidate: ModuleContent): ValidationCheck[] {
   const checks: ValidationCheck[] = [];
   const stats = inspectJson(content.value);
+  const rawValue = rawCandidate.kind === 'json' ? (rawCandidate.value as unknown) : content.value;
+  const rawUnsafeKeys = inspectJson(rawValue).unsafeKeys;
   checks.push(
     makeCheck({
       id: 'L1.json_depth',
@@ -600,12 +602,12 @@ function checkJson(content: Extract<ModuleContent, { kind: 'json' }>): Validatio
       layer: 'L1',
       code: 'json_safe_keys',
       title: 'JSON 不包含原型污染键',
-      status: stats.unsafeKeys.length === 0 ? 'pass' : 'fail',
+      status: rawUnsafeKeys.length === 0 ? 'pass' : 'fail',
       detail:
-        stats.unsafeKeys.length === 0
+        rawUnsafeKeys.length === 0
           ? '未发现 __proto__/constructor/prototype 键。'
-          : `发现危险键：${stats.unsafeKeys.slice(0, 10).join(', ')}。`,
-      affectedPaths: stats.unsafeKeys.slice(0, 10),
+          : `发现危险键：${rawUnsafeKeys.slice(0, 10).join(', ')}。`,
+      affectedPaths: rawUnsafeKeys.slice(0, 10),
     }),
   );
 

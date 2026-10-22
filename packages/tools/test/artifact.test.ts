@@ -1,21 +1,17 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   type ArtifactModule,
   type ArtifactReadResult,
   type ArtifactValidateArgs,
+  type ArtifactVersionId,
   type CsvContent,
   type EvidenceRef,
   type ModuleContent,
   type ProposePatchResult,
   type SourceLocator,
-} from '@ca/contracts';
-import {
-  createToolRuntime,
-  contentHash,
-  sha256Hex,
-  sourceSpanIdFor,
   type ValidateToolResult,
-} from '@ca/tools';
+} from '@ca/contracts';
+import { createToolRuntime, contentHash, sha256Hex, sourceSpanIdFor } from '@ca/tools';
 import { createTestWorld, failureOf, jsonArg, succeededData, type TestWorld } from './helpers';
 import { SOURCE_ID_A } from './source-ids';
 
@@ -38,7 +34,7 @@ const SOURCE_TEXT = ['# 约束', '延迟预算为 200ms', '离线模式必须可
 interface Fixture {
   world: TestWorld;
   module: ArtifactModule;
-  versionId: string;
+  versionId: ArtifactVersionId;
   evidence: EvidenceRef;
 }
 
@@ -97,19 +93,31 @@ describe('artifact.read', () => {
     expect(mismatch.code).toBe('version_not_found');
   });
 
-  it('returns empty content when nothing is accepted yet', async () => {
+  it('returns empty content for markdown/json modules without an accepted version', async () => {
+    const world = createTestWorld();
+    const markdown = world.addModule({ kind: 'markdown', accepted: false });
+    const markdownRead = succeededData<ArtifactReadResult>(
+      await call(world, 'artifact.read', { moduleId: markdown.module.id, versionId: null }),
+    );
+    expect(markdownRead.versionId).toBeNull();
+    expect(markdownRead.contentHash).toBeNull();
+    expect(markdownRead.content).toEqual({ kind: 'markdown', sections: [] });
+
+    const json = world.addModule({ kind: 'json', accepted: false });
+    const jsonRead = succeededData<ArtifactReadResult>(
+      await call(world, 'artifact.read', { moduleId: json.module.id, versionId: null }),
+    );
+    expect(jsonRead.content).toEqual({ kind: 'json', value: null });
+  });
+
+  it('explains that an empty CSV module has no representable content yet', async () => {
     const world = createTestWorld();
     const { module } = world.addModule({ kind: 'csv', accepted: false });
-    const result = succeededData<ArtifactReadResult>(
+    const failure = failureOf(
       await call(world, 'artifact.read', { moduleId: module.id, versionId: null }),
     );
-    expect(result.versionId).toBeNull();
-    expect(result.contentHash).toBeNull();
-    expect(result.content).toEqual({
-      kind: 'csv',
-      columns: [{ key: 'id', label: 'id', type: 'string', required: false }],
-      rows: [],
-    });
+    expect(failure.code).toBe('version_not_found');
+    expect(failure.message).toContain('at least one column');
   });
 
   it('fails predictably for unknown modules and versions', async () => {

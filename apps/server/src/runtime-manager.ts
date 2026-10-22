@@ -59,17 +59,27 @@ class DisabledDemoProviderGateway implements ProviderGateway {
 
 export type LogFn = (message: string, details?: Record<string, unknown>) => void;
 
+export interface RuntimeOverrides {
+  /**
+   * Test/dev seam: inject a scripted ProviderGateway instead of the real model
+   * adapter. Never set this in production bootstrapping.
+   */
+  providersFor?: (mode: 'demo' | 'live') => ProviderGateway | null;
+}
+
 export class RuntimeManager {
   readonly config: ServerConfig;
   readonly appVersion = APP_VERSION;
   private readonly runtimes = new Map<'demo' | 'live', ModeRuntime>();
   private active: 'demo' | 'live';
   private readonly log: LogFn;
+  private readonly overrides: RuntimeOverrides;
 
-  constructor(config: ServerConfig, log: LogFn = () => {}) {
+  constructor(config: ServerConfig, log: LogFn = () => {}, overrides: RuntimeOverrides = {}) {
     this.config = config;
     this.log = log;
     this.active = config.defaultMode;
+    this.overrides = overrides;
   }
 
   get currentMode(): 'demo' | 'live' {
@@ -115,9 +125,9 @@ export class RuntimeManager {
   }
 
   private async initMode(mode: 'demo' | 'live'): Promise<ModeRuntime> {
-    const dataDir = path.join(this.config.dataDir, mode);
+    // openStorage appends `<mode>/` itself and creates DB + objects per mode.
     const storage = openStorage({
-      dataDir,
+      dataDir: this.config.dataDir,
       mode,
       workspaceName: mode === 'demo' ? '演示工作区' : 'Live 工作区',
       settings: { autoAcceptVerifiedDrafts: false, pauseWhenPageCloses: false, reducedMotion: false, theme: 'dark', providerProfileIds: [] },
@@ -125,7 +135,10 @@ export class RuntimeManager {
     const credentials: CredentialStore = mode === 'live' ? new ServerCredentialStore(this.config) : new NoopCredentialStore();
     let providers: ProviderGateway;
     let liveProviders: LiveProviderGateway | null = null;
-    if (mode === 'live') {
+    const overrideProviders = this.overrides.providersFor?.(mode) ?? null;
+    if (overrideProviders) {
+      providers = overrideProviders;
+    } else if (mode === 'live') {
       liveProviders = new LiveProviderGateway(storage, credentials, this.config);
       providers = liveProviders;
       await liveProviders.ensureEnvProfile();
@@ -202,7 +215,10 @@ export class RuntimeManager {
         this.log('run recovery failed', { error: error instanceof Error ? error.message : String(error) });
       }
     } else {
-      await ensureDemoSeeded({ storage, config: this.config, log: this.log });
+      const existingTasks = await storage.listTasks();
+      if (this.config.seedDemo || existingTasks.length > 0) {
+        await ensureDemoSeeded({ storage, config: this.config, log: this.log });
+      }
     }
     scheduler.start();
     this.runtimes.set(mode, runtime);

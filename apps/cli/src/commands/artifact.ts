@@ -195,17 +195,17 @@ export const artifactRestoreCommand: CommandSpec = {
   summary: '把历史版本恢复为新版本（历史不丢失，下游标记过期）',
   flags: {
     '--module': { type: 'string', valueName: '<moduleId|标题>', description: '要恢复的模块（必填）' },
-    '--version': { type: 'string', valueName: '<versionId>', description: '要恢复到的历史版本 ID（必填）' },
+    '--to-version': { type: 'string', valueName: '<versionId>', description: '要恢复到的历史版本 ID（必填）' },
     '--artifact': { type: 'string', valueName: '<artifactId>', description: '交付物 ID（默认取任务快照）' },
     '--note': { type: 'string', valueName: '<说明>', description: '恢复备注（写入版本历史）' },
     '--expected-revision': { type: 'number', valueName: '<n>', description: '显式指定期望的任务修订号' },
   },
   positionals: [{ name: 'taskId', description: '任务 ID', required: true }],
-  examples: ['cognitive-atrium artifact restore <taskId> --module <moduleId> --version <versionId>'],
+  examples: ['cognitive-atrium artifact restore <taskId> --module <moduleId> --to-version <versionId>'],
   notes: ['恢复不会删除历史版本；当前版本会作为旧版本保留在版本链中。'],
   execute: async (command, ctx) => {
     const taskId = parseId(command.requirePositional(0, 'taskId'), TaskIdSchema, 'taskId');
-    const versionId = parseId(command.requireString('--version', '历史版本 ID'), ArtifactVersionIdSchema, 'versionId');
+    const versionId = parseId(command.requireString('--to-version', '历史版本 ID'), ArtifactVersionIdSchema, 'versionId');
     const snapshot = await getSnapshot(ctx, taskId);
     const artifactId = parseId(
       command.getString('--artifact') ?? snapshot.artifact.id,

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Contract tests for the OpenAI-compatible adapter (design section 6.2 matrix).
  * Uses a local node:http fake server only — no real network, no real credentials.
  */
@@ -53,10 +53,12 @@ function makeAdapter(
   profileOverrides: Partial<ProviderProfile> = {},
   options: AdapterOptions = {},
 ) {
+  // Generous defaults so a loaded CI machine cannot turn a fast fake server into
+  // a spurious timeout; timeout-specific tests pass small explicit values.
   return createAdapter(makeProfile(server.baseUrl, profileOverrides), TEST_CREDENTIAL, {
-    firstEventTimeoutMs: 500,
-    idleTimeoutMs: 500,
-    totalTimeoutMs: 5000,
+    firstEventTimeoutMs: 2000,
+    idleTimeoutMs: 2000,
+    totalTimeoutMs: 15000,
     ...options,
   });
 }
@@ -212,6 +214,15 @@ describe('OpenAI-compatible request serialization', () => {
     expect(buildChatCompletionsUrl('http://127.0.0.1:8080/v1/chat/completions/')).toBe(
       'http://127.0.0.1:8080/v1/chat/completions',
     );
+    // Query parameters must survive (Azure-style endpoints need ?api-version=).
+    expect(buildChatCompletionsUrl('https://host.example/v1?api-version=2024-06-01')).toBe(
+      'https://host.example/v1/chat/completions?api-version=2024-06-01',
+    );
+    expect(
+      buildChatCompletionsUrl(
+        'https://host.example/openai/deployments/d/chat/completions?api-version=2024-06-01',
+      ),
+    ).toBe('https://host.example/openai/deployments/d/chat/completions?api-version=2024-06-01');
     expect(() => buildChatCompletionsUrl('ftp://example.com')).toThrowError(ProviderError);
     expect(() => buildChatCompletionsUrl('https://user:pass@example.com/v1')).toThrowError(ProviderError);
   });
@@ -315,7 +326,12 @@ describe('non-streaming responses', () => {
       jsonResponse(res, chatCompletionPayload({ content: 'partial', finishReason: 'length' }));
     });
     const events = await collectEvents(makeAdapter(server), makeRequest({ stream: false }));
-    expect(eventsOfType(events, 'text_delta').map((event) => event.text).join('')).toBe('partial');
+    expect(
+      eventsOfType(events, 'text_delta')
+        .map((event) => event.text)
+        .join(''),
+      JSON.stringify(events),
+    ).toBe('partial');
     expect(eventsOfType(events, 'finish')[0]?.reason).toBe('length');
     const error = lastError(events)?.error;
     expect(error?.code).toBe('truncated');
@@ -491,7 +507,7 @@ describe('streaming SSE responses', () => {
     });
     const events = await collectEvents(makeAdapter(server), makeRequest());
     const text = eventsOfType(events, 'text_delta').map((event) => event.text).join('');
-    expect(text).toBe('partial output');
+    expect(text, JSON.stringify(events)).toBe('partial output');
     expect(eventsOfType(events, 'finish')[0]?.reason).toBe('length');
     const error = lastError(events)?.error;
     expect(error?.code).toBe('truncated');
@@ -527,22 +543,24 @@ describe('streaming SSE responses', () => {
     expect(error?.message).toContain('I cannot help with that.');
   });
 
-  it('ignores SSE keep-alive comments while resetting the idle timer', async () => {
+  it('ignores SSE keep-alive comments and keeps the stream open', async () => {
     const server = await fake(async ({ res }) => {
       startSse(res);
       writeSseRaw(res, ': keep-alive\n\n');
-      await delay(120);
+      await delay(150);
       writeSseJson(res, chatChunk({ content: 'ok' }));
-      await delay(120);
+      await delay(150);
       writeSseJson(res, chatChunk({}, 'stop'));
       writeSseDone(res);
     });
     const events = await collectEvents(
-      makeAdapter(server, {}, { firstEventTimeoutMs: 2000, idleTimeoutMs: 180 }),
+      makeAdapter(server, {}, { firstEventTimeoutMs: 3000, idleTimeoutMs: 600 }),
       makeRequest(),
     );
     expect(lastError(events)).toBeNull();
     expect(eventsOfType(events, 'text_delta').map((event) => event.text).join('')).toBe('ok');
+    // The keep-alive comment must not be parsed as a data event.
+    expect(JSON.stringify(events)).not.toContain('keep-alive');
   });
 
   it('maps an invalid SSE JSON chunk to invalid_response', async () => {
@@ -570,6 +588,32 @@ describe('streaming SSE responses', () => {
     expect(error?.retryable).toBe(false);
     expect(error?.message).not.toContain(TEST_CREDENTIAL);
     expect(error?.message).toContain('6789');
+  });
+
+  it('never puts the credential into emitted events', async () => {
+    const errorServer = await fake(({ res }) => {
+      startSse(res);
+      writeSseRaw(
+        res,
+        `data: ${JSON.stringify({ error: { message: `invalid api key ${TEST_CREDENTIAL}`, code: 'invalid_api_key' } })}\n\n`,
+      );
+      writeSseDone(res);
+    });
+    const errorEvents = await collectEvents(makeAdapter(errorServer), makeRequest());
+    const errorSerialized = JSON.stringify(errorEvents);
+    expect(errorSerialized).not.toContain(TEST_CREDENTIAL);
+    expect(errorSerialized).not.toContain('abc123456789');
+
+    const successServer = await fake(({ res }) => {
+      startSse(res);
+      writeSseJson(res, chatChunk({ content: 'safe' }));
+      writeSseJson(res, chatChunk({}, 'stop'));
+      writeSseDone(res);
+    });
+    const successEvents = await collectEvents(makeAdapter(successServer), makeRequest());
+    const successSerialized = JSON.stringify(successEvents);
+    expect(successSerialized).not.toContain(TEST_CREDENTIAL);
+    expect(successSerialized).not.toContain('abc123456789');
   });
 
   it('captures a usage-only chunk with empty choices', async () => {
@@ -614,6 +658,9 @@ describe('HTTP error mapping', () => {
       expect(error?.retryable).toBe(testCase.retryable);
       expect(error?.httpStatus).toBe(testCase.status);
       expect(error?.message).toContain(`provider said ${testCase.status}`);
+      // The adapter never retries providers on its own (retry policy belongs to
+      // the caller's budget) and never switches provider.
+      expect(server.requests).toHaveLength(1);
     });
   }
 
@@ -712,6 +759,50 @@ describe('timeouts and cancellation', () => {
     );
     const error = lastError(events)?.error;
     expect(error?.code).toBe('total_timeout');
+    expect(error?.retryable).toBe(true);
+  });
+
+  it('keeps partial text when the total timeout fires mid-stream', async () => {
+    const server = await fake(async ({ res }) => {
+      startSse(res);
+      writeSseJson(res, chatChunk({ content: 'partial before total timeout' }));
+      await delay(600);
+      endSse(res);
+    });
+    const events = await collectEvents(
+      makeAdapter(server, {}, { firstEventTimeoutMs: 2000, idleTimeoutMs: 2000, totalTimeoutMs: 150 }),
+      makeRequest(),
+    );
+    const textIndex = events.findIndex((event) => event.type === 'text_delta');
+    const errorIndex = events.findIndex((event) => event.type === 'error');
+    expect(textIndex).toBeGreaterThanOrEqual(0);
+    expect(errorIndex).toBeGreaterThan(textIndex);
+    expect(lastError(events)?.error.code).toBe('total_timeout');
+  });
+
+  it('maps an unknown finish reason to unknown without failing the call', async () => {
+    const server = await fake(({ res }) => {
+      startSse(res);
+      writeSseJson(res, chatChunk({ content: 'ok' }));
+      writeSseJson(res, chatChunk({}, 'some_future_reason'));
+      writeSseDone(res);
+    });
+    const events = await collectEvents(makeAdapter(server), makeRequest());
+    expect(lastError(events)).toBeNull();
+    expect(eventsOfType(events, 'finish')[0]?.reason).toBe('unknown');
+  });
+
+  it('maps an error finish reason to a retryable server_error', async () => {
+    const server = await fake(({ res }) => {
+      startSse(res);
+      writeSseJson(res, chatChunk({ content: 'ok' }));
+      writeSseJson(res, chatChunk({}, 'error'));
+      writeSseDone(res);
+    });
+    const events = await collectEvents(makeAdapter(server), makeRequest());
+    expect(eventsOfType(events, 'finish')[0]?.reason).toBe('error');
+    const error = lastError(events)?.error;
+    expect(error?.code).toBe('server_error');
     expect(error?.retryable).toBe(true);
   });
 
@@ -844,7 +935,7 @@ describe('adapter construction and configuration', () => {
     const adapter = createAdapter(makeProfile('https://10.0.0.5/v1'), TEST_CREDENTIAL, {
       urlPolicy: { allowHttpLoopback: false, allowedProviderHosts: ['10.0.0.5'] },
     });
-    expect((adapter as { describe(): { requestUrl: string } }).describe().requestUrl).toBe(
+    expect((adapter as unknown as { describe(): { requestUrl: string } }).describe().requestUrl).toBe(
       'https://10.0.0.5/v1/chat/completions',
     );
   });

@@ -96,22 +96,40 @@ export function mapError(error: unknown, traceId: string): MappedError {
   if (name === 'StateNotAllowedError' || code === 'state_not_allowed') {
     return { status: 409, body: { code: 'state_not_allowed', message: err.message ?? '当前状态不允许该操作', retryable: false, traceId } };
   }
+  if (name === 'UrlPolicyError' || code === 'url_not_allowed') {
+    return { status: 400, body: { code: 'bad_request', message: err.message ?? '模型服务地址不被允许', retryable: false, traceId } };
+  }
   if (name === 'HarnessError' || name === 'ProviderError') {
-    const mapped: Record<string, { status: number; code: ApiErrorBody['code'] }> = {
+    const mapped: Record<string, { status: number; code: ApiErrorBody['code']; retryable?: boolean }> = {
       revision_conflict: { status: 409, code: 'revision_conflict' },
       version_conflict: { status: 409, code: 'version_conflict' },
       state_not_allowed: { status: 409, code: 'state_not_allowed' },
       budget_exhausted: { status: 422, code: 'budget_exhausted' },
       schema_invalid: { status: 422, code: 'schema_invalid' },
       validation_failed: { status: 422, code: 'validation_failed' },
+      dependency_unavailable: { status: 422, code: 'dependency_unavailable' },
+      not_found: { status: 404, code: 'not_found' },
+      // Contract ProviderErrorDetail codes (adapter surface).
+      auth_error: { status: 502, code: 'provider_auth_error' },
+      rate_limited: { status: 503, code: 'provider_rate_limited', retryable: true },
+      model_missing: { status: 502, code: 'provider_model_missing' },
+      bad_request: { status: 422, code: 'bad_request' },
+      refused: { status: 422, code: 'validation_failed' },
+      truncated: { status: 422, code: 'validation_failed' },
+      unsupported_feature: { status: 422, code: 'bad_request' },
+      invalid_response: { status: 502, code: 'provider_error', retryable: true },
+      network_error: { status: 502, code: 'provider_error', retryable: true },
+      first_event_timeout: { status: 504, code: 'provider_error', retryable: true },
+      idle_timeout: { status: 504, code: 'provider_error', retryable: true },
+      total_timeout: { status: 504, code: 'provider_error', retryable: true },
+      cancelled: { status: 409, code: 'state_not_allowed' },
+      // Harness-level provider kinds.
       provider_auth_error: { status: 502, code: 'provider_auth_error' },
-      provider_rate_limited: { status: 503, code: 'provider_rate_limited' },
+      provider_rate_limited: { status: 503, code: 'provider_rate_limited', retryable: true },
       provider_model_missing: { status: 502, code: 'provider_model_missing' },
       provider_error: { status: 502, code: 'provider_error' },
       tool_timeout: { status: 504, code: 'tool_timeout' },
       tool_outcome_unknown: { status: 409, code: 'tool_outcome_unknown' },
-      dependency_unavailable: { status: 422, code: 'dependency_unavailable' },
-      not_found: { status: 404, code: 'not_found' },
     };
     const entry = mapped[code];
     if (entry) {
@@ -120,7 +138,7 @@ export function mapError(error: unknown, traceId: string): MappedError {
         body: {
           code: entry.code,
           message: err.message ?? '执行失败',
-          retryable: err.retryable ?? false,
+          retryable: entry.retryable ?? err.retryable ?? false,
           details: err.details as ApiErrorBody['details'],
           traceId,
         },

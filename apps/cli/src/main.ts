@@ -122,6 +122,7 @@ function emitOutcome(outcome: CliOutcome, globals: Globals, ctx: CliContext, ser
   const exitCode = outcome.exitCode ?? EXIT.OK;
   const status = outcome.status ?? (exitCode === 0 ? 'ok' : 'error');
   const ok = exitCode === EXIT.OK && status === 'ok';
+  if (outcome.alreadyEmitted) return;
   if (globals.json) {
     if (outcome.alreadyEmitted) return;
     const document: Record<string, unknown> = {

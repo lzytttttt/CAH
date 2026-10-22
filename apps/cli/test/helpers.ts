@@ -195,6 +195,7 @@ export const PROFILE_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 export const RECIPE_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 export const SOURCE_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 export const BLOCKER_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+export const CONTEXT_SNAPSHOT_ID = '12121212-1212-4212-8212-121212121212';
 export const HEX = 'a'.repeat(64);
 
 export function uuidFor(seq: number): string {

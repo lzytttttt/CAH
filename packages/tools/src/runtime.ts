@@ -305,7 +305,7 @@ for (const toolId of TOOL_IDS) {
 
 /* ------------------------------ argument guard ------------------------------ */
 
-export type ArgumentValidationResult = { ok: true; args: JsonObject } | { ok: false; error: string };
+type ArgumentValidationResult = { ok: true; args: JsonObject } | { ok: false; error: string };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -315,7 +315,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * Parse and strictly validate raw stream-assembled argument JSON.
  * Nothing is executed here and partial/streaming JSON is always rejected.
  */
-export function validateToolArguments(entry: ToolEntry, rawJson: string): ArgumentValidationResult {
+function validateToolArguments(entry: ToolEntry, rawJson: string): ArgumentValidationResult {
   if (typeof rawJson !== 'string') {
     return { ok: false, error: 'arguments must be a JSON string' };
   }
@@ -364,11 +364,12 @@ function failure(
   startedAt: number,
   monotonicNow: () => number,
   error: ToolRuntimeError,
+  status: ToolResult['status'] = 'failed',
 ): ToolResult {
   return {
     toolCallId,
     toolId,
-    status: 'failed',
+    status,
     resultObjectHash: null,
     resultBytes: 0,
     durationMs: Math.max(0, Math.round(monotonicNow() - startedAt)),
@@ -557,7 +558,20 @@ export function createToolRuntime(options: CreateToolRuntimeOptions = {}): ToolR
         trust: 'untrusted_content',
       };
     } catch (error) {
-      return failure(ctx.toolCallId, toolId, startedAt, monotonicNow, toToolRuntimeError(error));
+      const runtimeError = toToolRuntimeError(error);
+      // A timeout/abort while a draft-write tool is in flight is genuinely
+      // ambiguous: the effect may or may not have been applied (design 8.3).
+      const ambiguous =
+        (runtimeError.code === 'tool_timeout' || runtimeError.code === 'aborted') &&
+        entry.policy.idempotency !== 'safe';
+      return failure(
+        ctx.toolCallId,
+        toolId,
+        startedAt,
+        monotonicNow,
+        runtimeError,
+        ambiguous ? 'outcome_unknown' : 'failed',
+      );
     }
   }
 
@@ -579,7 +593,7 @@ export function createToolRuntime(options: CreateToolRuntimeOptions = {}): ToolR
       return entries
         .filter((entry) => allowedSet.has(entry.id))
         .map((entry) => ({
-          name: entry.id,
+          name: modelToolName(entry.id),
           description: bound(`${entry.title}. ${entry.description} Returns: ${entry.resultDescription}`, 4000),
           parameters: cloneJson(entry.parameters),
           strict: true,
@@ -594,6 +608,26 @@ export function createToolRuntime(options: CreateToolRuntimeOptions = {}): ToolR
       return executeCall(toolId, rawArgumentsJson, ctx);
     },
   };
+}
+
+/** Model-facing function name for a tool id (identity: dotted ids are preserved). */
+export function modelToolName(toolId: ToolId): string {
+  return toolId;
+}
+
+/**
+ * Resolve a provider/model-supplied function name back to a ToolId. Accepts the
+ * exact dotted id as well as underscore-sanitized variants that OpenAI-style
+ * function-name rules may require.
+ */
+export function toolIdForModelName(name: string): ToolId | null {
+  const candidate = name.trim();
+  const exact = TOOL_IDS.find((toolId) => toolId === candidate);
+  if (exact) return exact;
+  const singleUnderscore = TOOL_IDS.find((toolId) => toolId.replace(/\./g, '_') === candidate);
+  if (singleUnderscore) return singleUnderscore;
+  const doubleUnderscore = TOOL_IDS.find((toolId) => toolId.replace(/\./g, '__') === candidate);
+  return doubleUnderscore ?? null;
 }
 
 /** Deterministic JSON Schema info per tool (for plan validation display/tests). */

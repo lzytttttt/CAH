@@ -127,6 +127,22 @@ describe('transactions', () => {
     expect(await storage.latestSeq(bundle.task.id)).toBe(1);
   });
 
+  it('refuses maintenance operations inside an open transaction', async () => {
+    const { storage } = await setup();
+    await expect(
+      storage.transaction(async () => {
+        await storage.close();
+      }),
+    ).rejects.toMatchObject({ code: 'state_not_allowed' });
+    await expect(
+      storage.transaction(async () => {
+        await storage.backupTo(`${storage.modeDir}-backup`);
+      }),
+    ).rejects.toMatchObject({ code: 'state_not_allowed' });
+    // The guards fire before touching the connection, so the storage is healthy.
+    expect((await storage.getWorkspace()).mode).toBe('demo');
+  });
+
   it('rejects use after close', async () => {
     const { storage, bundle } = await setup();
     await storage.close();

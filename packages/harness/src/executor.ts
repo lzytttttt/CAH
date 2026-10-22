@@ -707,7 +707,11 @@ async function raiseServiceFailure(runtime: Runtime, run: Run, step: Step, messa
 /* ---------------------------- tool result parsing -------------------------- */
 
 function resolveToolId(name: string): ToolId | null {
-  return (TOOL_IDS as readonly string[]).includes(name) ? (name as ToolId) : null;
+  if ((TOOL_IDS as readonly string[]).includes(name)) return name as ToolId;
+  // Some providers sanitize dots in function names to underscores; map back.
+  const normalized = name.replace(/__/g, '.').replace(/_/g, '.');
+  if ((TOOL_IDS as readonly string[]).includes(normalized)) return normalized as ToolId;
+  return null;
 }
 
 function extractProposePatch(raw: unknown): (CandidateParseResult & { patchId: string }) | null {

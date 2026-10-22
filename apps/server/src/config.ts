@@ -31,7 +31,7 @@ export interface ServerConfig {
   allowedOrigins: string[];
   allowHttpLoopback: boolean;
   allowedProviderHosts: string[];
-  logLevel: 'debug' | 'info' | 'warn' | 'error';
+  logLevel: 'debug' | 'info' | 'warn' | 'error' | 'silent';
   seedDemo: boolean;
   webDistDir: string;
   sessionTokenFile: string;
@@ -66,8 +66,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
         ],
     allowHttpLoopback: bool(env.CA_ALLOW_HTTP_LOOPBACK, true),
     allowedProviderHosts: list(env.CA_ALLOWED_PROVIDER_HOSTS),
-    logLevel: (env.CA_LOG_LEVEL as ServerConfig['logLevel']) ?? 'info',
-    seedDemo: bool(env.CA_SEED_DEMO, true),
+    logLevel: (env.CA_LOG_LEVEL as ServerConfig['logLevel']) ?? 'info',    seedDemo: bool(env.CA_SEED_DEMO, true),
     webDistDir: path.join(root, 'apps/web/dist'),
     sessionTokenFile: env.CA_SESSION_TOKEN_FILE
       ? path.resolve(root, env.CA_SESSION_TOKEN_FILE)

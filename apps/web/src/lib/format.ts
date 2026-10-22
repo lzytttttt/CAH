@@ -1,5 +1,7 @@
 /** Formatting helpers: time, counts, budgets, truncation. Pure and DOM-free. */
 
+export { formatBytes } from './ids';
+
 export function formatTimestamp(iso: string | null | undefined, locale = 'zh-CN'): string {
   if (!iso) return '—';
   const date = new Date(iso);

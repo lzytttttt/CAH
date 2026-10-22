@@ -9,6 +9,7 @@
 import {
   LIMITS,
   SourceSpanIdSchema,
+  canonicalJson,
   type SearchHit,
   type SourceId,
   type SourceItem,
@@ -18,6 +19,7 @@ import {
   type SourceReadResult,
   type SourceSearchResult,
   type SourceSpan,
+  type SourceSpanId,
   type SourceSpanRef,
   type SourceListArgs,
   type SourceReadArgs,
@@ -29,7 +31,6 @@ import { sha256Hex } from './hash';
 import { parseBoundedJson } from './json-data';
 import { compareText, excerptAround, truncateText } from './table';
 import type { ToolContext } from './types';
-import { canonicalJson } from '@ca/contracts';
 
 export type SourceFormat = 'csv' | 'json' | 'text';
 
@@ -275,7 +276,7 @@ export function sourceSpanIdFor(
   version: number,
   locator: SourceLocator,
   quoteHash: string,
-): ReturnType<typeof SourceSpanIdSchema.parse> {
+): SourceSpanId {
   const digest = sha256Hex(canonicalJson({ kind: 'source_span.v1', sourceId, version, locator, quoteHash }));
   const hex = digest.slice(0, 32);
   const uuid = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
@@ -456,7 +457,7 @@ function collectCsvHits(source: SourceItem, text: string, lowerQuery: string, si
   const { lines } = splitSourceLines(text);
   const headerLine = lines[0] ?? '';
   const headerOccurrences = countOccurrences(headerLine.toLowerCase(), lowerQuery);
-  if (headerOccurrences > 0) {
+  if (headerOccurrences > 0 && sink.length < MAX_SEARCH_CANDIDATE_HITS) {
     const excerpt = excerptAround(headerLine, headerLine.toLowerCase().indexOf(lowerQuery), SEARCH_EXCERPT_CHARS);
     const locator: SourceLocator = { kind: 'text_lines', startLine: 1, endLine: 1 };
     sink.push({ hit: makeHit(source.id, source.version, locator, excerpt, headerOccurrences), order: 0 });

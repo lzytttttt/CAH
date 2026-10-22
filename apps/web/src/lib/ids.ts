@@ -1,4 +1,5 @@
 /** Small pure helpers shared by the API layer and UI. */
+import type { CommandId } from '@ca/contracts';
 
 /** RFC 4122 v4 UUID from the platform crypto; fails loudly when unavailable. */
 export function randomUuid(): string {
@@ -21,9 +22,10 @@ export interface CommandIds {
 }
 
 /** Build the idempotency envelope for a mutating command. */
-export function commandEnvelope(expectedRevision?: number): { commandId: string } & { expectedRevision?: number } {
-  if (expectedRevision == null) return { commandId: randomUuid() };
-  return { commandId: randomUuid(), expectedRevision };
+export function commandEnvelope(expectedRevision?: number): { commandId: CommandId } & { expectedRevision?: number } {
+  const commandId = randomUuid() as CommandId;
+  if (expectedRevision == null) return { commandId };
+  return { commandId, expectedRevision };
 }
 
 /** Short id for compact display without hiding identity from tooltips/aria labels. */

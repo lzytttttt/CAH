@@ -291,7 +291,9 @@ export function buildSpatialLayout(spatial: SpatialProjection, options: BuildSpa
     hiddenNodes += branch.hiddenNodeCount;
     if (branch.hiddenNodeCount > 0) {
       const lane = laneSlice.find((entry) => entry.id === branch.id);
+      const shownIds = new Set(branch.nodes.map((view) => view.node.id));
       for (const node of lane?.nodes ?? []) {
+        if (shownIds.has(node.id)) continue;
         localHidden.byKind[node.kind] = (localHidden.byKind[node.kind] ?? 0) + 1;
       }
     }

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * RFC 4180-style CSV parser and writer.
  *
  * Rules implemented:
@@ -50,9 +50,9 @@ export interface ParsedCsv {
   duplicateHeaders: string[];
 }
 
-const DEFAULT_MAX_ROWS = LIMITS.maxCsvRows;
-const DEFAULT_MAX_COLUMNS = LIMITS.maxCsvColumns;
-const DEFAULT_MAX_FIELD_CHARS = LIMITS.maxCsvFieldChars;
+const DEFAULT_MAX_ROWS: number = LIMITS.maxCsvRows;
+const DEFAULT_MAX_COLUMNS: number = LIMITS.maxCsvColumns;
+const DEFAULT_MAX_FIELD_CHARS: number = LIMITS.maxCsvFieldChars;
 
 /** Parse CSV text. Throws CsvParseError for structural problems and limit breaks. */
 export function parseCsv(text: string, options: CsvParseOptions = {}): ParsedCsv {
@@ -284,7 +284,10 @@ export function writeCsv(
     lines.push(serializeCsvRecord(header.map((name) => String(name))));
   }
   for (const row of rows) lines.push(serializeCsvRecord(row));
-  return lines.length === 0 ? '' : `${lines.join(eol)}${eol}`;
+  if (lines.length === 0) return '';
+  // A table with no columns and no data has no representable CSV text.
+  if (header.length === 0 && lines.every((line) => line.length === 0)) return '';
+  return `${lines.join(eol)}${eol}`;
 }
 
 /** Serialize a normalized table as CSV. */
