@@ -101,16 +101,29 @@ export class RuntimeManager {
     return this.runtimes.get('live') ?? null;
   }
 
-  /** Switch workspace mode only when no run is active anywhere (design 3.3). */
+  /**
+   * Switch workspace mode only when nothing is actively executing (design 3.3:
+   * finish or preserve current runs, then enter an independent task space).
+   * Runs waiting on input / review / paused / interrupted are preserved, they
+   * are not "executing" and do not block the switch.
+   */
   async switchMode(mode: 'demo' | 'live'): Promise<void> {
     if (mode === this.active) return;
     if (!this.runtimes.has(mode)) {
       throw new HarnessError('state_not_allowed', `模式 ${mode} 当前不可用`);
     }
+    const executing = new Set(['CREATED', 'PLANNING', 'RUNNING', 'PAUSING', 'VALIDATING', 'COMMITTING', 'CANCELLING']);
     for (const [name, runtime] of this.runtimes) {
-      const activeRuns = await runtime.storage.countActiveRuns();
-      if (activeRuns > 0 || runtime.scheduler.activeCount() > 0) {
-        throw new HarnessError('state_not_allowed', `存在运行中的任务，不能切换模式（${name}: ${activeRuns} 个活动运行）`);
+      if (runtime.scheduler.activeCount() > 0) {
+        throw new HarnessError('state_not_allowed', `存在执行中的任务，不能切换模式（${name}）`);
+      }
+      const tasks = await runtime.storage.listTasks();
+      for (const task of tasks) {
+        const runs = await runtime.storage.listRuns(task.id);
+        const busy = runs.find((run) => executing.has(run.state));
+        if (busy) {
+          throw new HarnessError('state_not_allowed', `任务「${task.title}」存在执行中的运行（${busy.state}），不能切换模式`);
+        }
       }
     }
     this.active = mode;

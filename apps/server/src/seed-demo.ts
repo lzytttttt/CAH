@@ -135,31 +135,49 @@ export async function ensureDemoSeeded(deps: SeedDeps): Promise<void> {
   ];
   const { createHash } = await import('node:crypto');
   const { newSourceId } = await import('@ca/contracts');
+  const seededSources: Array<import('@ca/contracts').SourceItem> = [];
   for (const file of sourceFiles) {
     try {
       const bytes = await readFile(path.join(scenarioDir, file.name));
       const hash = createHash('sha256').update(bytes).digest('hex');
-      await deps.storage.insertSource(
-        {
-          id: newSourceId(),
-          taskId,
-          name: file.name,
-          mime: file.mime,
-          version: 1,
-          sizeBytes: bytes.length,
-          hash,
-          origin: 'demo_seed',
-          trustLevel: 'synthetic_demo',
-          availability: 'available',
-          parseStatus: 'parsed',
-          parseNote: '',
-          createdAt: now,
-        },
-        bytes,
-      );
+      const sourceItem: import('@ca/contracts').SourceItem = {
+        id: newSourceId(),
+        taskId,
+        name: file.name,
+        mime: file.mime,
+        version: 1,
+        sizeBytes: bytes.length,
+        hash,
+        origin: 'demo_seed',
+        trustLevel: 'synthetic_demo',
+        availability: 'available',
+        parseStatus: 'parsed',
+        parseNote: '',
+        createdAt: now,
+      };
+      await deps.storage.insertSource(sourceItem, bytes);
+      seededSources.push(sourceItem);
     } catch (error) {
       deps.log('demo source seed failed', { name: file.name, error: error instanceof Error ? error.message : String(error) });
     }
+  }
+  // Fixed Demo event fixtures: accepted module, pending review patch, blocked plan
+  // preview, earlier failed attempt and a validated deterministic recipe.
+  try {
+    const legacyCsvText = await readFile(path.join(scenarioDir, 'legacy-systems.csv'), 'utf8');
+    const { seedDemoHistory } = await import('./demo-fixtures');
+    await seedDemoHistory({
+      storage: deps.storage,
+      task,
+      artifact,
+      modules,
+      sources: seededSources,
+      legacyCsvText,
+      log: deps.log,
+    });
+  } catch (error) {
+    deps.log('demo fixture history seed failed', { error: error instanceof Error ? error.message : String(error) });
+    throw error;
   }
   deps.log('demo task seeded', { taskId });
 }

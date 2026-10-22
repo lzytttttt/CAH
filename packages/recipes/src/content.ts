@@ -25,7 +25,6 @@ import {
   tableFromJsonValue,
   tableFromModuleContent,
   tableToCsv,
-  tableToJsonValue,
   truncateText,
   utf8Encode,
   type TableData,
@@ -58,6 +57,27 @@ export function serializeModuleContent(content: ModuleContent): Uint8Array {
   // canonical JSON bytes: sha256(bytes) === contentHash(content), so the object
   // store hash and the artifact contentHash are the same value by construction.
   return utf8Encode(canonicalJson(content));
+}
+
+/**
+ * Inverse of `serializeModuleContent`: decode the canonical ModuleContent JSON
+ * object written by emit_artifact. Servers should use this instead of guessing
+ * the artifact format from the output bytes.
+ */
+export function deserializeModuleContent(bytes: Uint8Array): ModuleContent {
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch (error) {
+    throw new RecipeRuntimeError('internal_error', `emitted object is not UTF-8 text: ${errorMessage(error)}`);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new RecipeRuntimeError('internal_error', `emitted object is not canonical ModuleContent JSON: ${errorMessage(error)}`);
+  }
+  return parseContent(parsed as ModuleContent, '<emitted-object>');
 }
 
 export function contentFromTableForKind(table: TableData, moduleKind: ModuleKind): ModuleContent {
@@ -324,4 +344,3 @@ function describeValue(value: unknown): string {
   return typeof value === 'string' ? `string(${value.length} chars)` : typeof value;
 }
 
-export { tableToJsonValue };

@@ -17,7 +17,7 @@ import {
   type TaskId,
   type ValidationReport,
 } from '@ca/contracts';
-import { computeRecipeFingerprint, createRecipeRuntime, extractRecipeCandidate, type RecipeTrace } from '@ca/recipes';
+import { computeRecipeFingerprint, createRecipeRuntime, deserializeModuleContent, extractRecipeCandidate, buildRecipeFingerprint, type RecipeTrace } from '@ca/recipes';
 import type { EventDraft } from '@ca/storage';
 import type { ModeRuntime } from './runtime-manager';
 import { createArtifactAccess, createObjectWriter, createSourceReader } from './tool-ports';
@@ -48,11 +48,19 @@ export async function buildRecipeTrace(runtime: ModeRuntime, runId: string): Pro
   const producedContent = patch?.candidate ?? accepted?.content ?? null;
   const traceSteps = steps.map((step) => {
     const invocation = invocations.find((i) => i.stepId === step.id);
+    // Recipes extraction recovers declarative operators from the tool invocation
+    // arguments; step summaries alone are rejected as insufficient.
+    let inputSummary = '{}';
+    if (step.kind === 'tool' && invocation) {
+      inputSummary = invocation.argumentsJson;
+    } else if (step.kind === 'model') {
+      inputSummary = JSON.stringify({ maxOutputTokens: 1024 });
+    }
     return {
       kind: step.kind,
       title: step.title,
       toolId: invocation?.toolId ?? null,
-      inputSummary: step.inputRefsJson.slice(0, 500),
+      inputSummary,
       outputSummary: (invocation?.resultSummary ?? step.summary).slice(0, 500),
       outputObjectHash: invocation?.resultObjectHash ?? null,
       startedAt: step.startedAt ?? step.finishedAt ?? run.createdAt,
@@ -115,14 +123,13 @@ export async function registerRecipe(
   if (!task) throw fail.notFound('来源任务');
   const toolVersions: Record<string, string> = {};
   for (const descriptor of runtime.tools.descriptors()) toolVersions[descriptor.id] = descriptor.version;
-  const fingerprint = computeRecipeFingerprint({
-    dslVersion: RECIPE_DSL_VERSION,
-    stepFingerprint: createHash('sha256').update(canonicalJson(proposal.steps)).digest('hex'),
+  const pins = {
     toolVersions,
-    promptHashes: {},
+    promptHashes: {} as Record<string, string>,
     validatorVersion: VALIDATOR_VERSION,
     parserVersion: PARSER_VERSION,
-  });
+  };
+  const built = buildRecipeFingerprint({ steps: proposal.steps }, pins);
   const now = utcNow();
   const recipe: Recipe = {
     id: newRecipeId(),
@@ -140,7 +147,7 @@ export async function registerRecipe(
     validators: proposal.testCases.length ? [] : [],
     permissions: {
       tools: ['source.read', 'source.search', 'data.profile', 'data.transform', 'artifact.read'],
-      scopes: ['sources:read', 'data:transform', 'artifact:read'],
+      scopes: ['sources:read', 'data:profile', 'data:transform', 'artifact:read'],
       allowModelCalls: proposal.kind !== 'deterministic',
       maxModelCallsPerRun: proposal.kind === 'deterministic' ? 0 : 8,
     },
@@ -150,15 +157,8 @@ export async function registerRecipe(
       maxRuntimeMs: 60_000,
     },
     testCases: proposal.testCases,
-    fingerprint,
-    fingerprintInputs: {
-      dslVersion: RECIPE_DSL_VERSION,
-      stepFingerprint: createHash('sha256').update(canonicalJson(proposal.steps)).digest('hex'),
-      toolVersions,
-      promptHashes: {},
-      validatorVersion: VALIDATOR_VERSION,
-      parserVersion: PARSER_VERSION,
-    },
+    fingerprint: built.fingerprint,
+    fingerprintInputs: built.fingerprintInputs,
     sourceRunId: run.id,
     sourceTaskId: task.id,
     sourceModuleId: run.moduleId,
@@ -209,13 +209,8 @@ export class RecipeService {
       parserVersion: PARSER_VERSION,
     });
     const updated = await runtime.validate(recipe, recipe.testCases, inputsByCase);
-    const passedAccept = updated.testCases.filter((t) => t.expectation === 'accept' && t.status === 'passed').length;
-    const passedReject = updated.testCases.filter((t) => t.expectation === 'reject' && t.status === 'passed').length;
-    const nextStatus: Recipe['status'] = passedAccept >= 2 && passedReject >= 1 ? 'validated' : updated.status === 'validated' ? 'validated' : 'candidate';
     const changed: Recipe = {
       ...updated,
-      version: passedAccept >= 2 && passedReject >= 1 && updated.status !== 'validated' ? updated.version + 1 : updated.version,
-      status: nextStatus,
       updatedAt: utcNow(),
     };
     await this.runtime.storage.updateRecipe(changed);
@@ -230,7 +225,7 @@ export class RecipeService {
           recipeId: changed.id,
           version: changed.version,
           fingerprint: changed.fingerprint,
-          testSummary: `${passedAccept} 个接受用例通过，${passedReject} 个拒绝用例通过`,
+          testSummary: changed.staleReason ?? `${changed.testCases.length} 个测试用例执行完成`,
           testCases: changed.testCases.length,
         },
       });
@@ -347,15 +342,13 @@ export class RecipeService {
       await this.failRun(run, commandId, '配方输出对象丢失', events);
       throw fail.internal('配方输出对象丢失');
     }
-    const text = new TextDecoder('utf-8', { fatal: false }).decode(object.bytes);
+    // emit_artifact writes canonical ModuleContent JSON; decode it strictly.
     let candidateContent: import('@ca/contracts').ModuleContent;
-    if (output.moduleKind === 'csv') {
-      const parsed = parseCsvContent(text);
-      candidateContent = parsed;
-    } else if (output.moduleKind === 'json') {
-      candidateContent = { kind: 'json', value: JSON.parse(text) as never };
-    } else {
-      candidateContent = { kind: 'markdown', sections: [{ id: 'content', title: recipe.name, markdown: text.slice(0, 200_000) }] };
+    try {
+      candidateContent = deserializeModuleContent(object.bytes);
+    } catch (error) {
+      await this.failRun(run, commandId, `配方输出不是合法模块内容：${error instanceof Error ? error.message : String(error)}`, events);
+      throw fail.validationFailed('配方输出不是合法模块内容');
     }
     const validation: ValidationReport = await this.runtime.validator.validate({
       taskId: task.id,

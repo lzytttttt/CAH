@@ -221,6 +221,37 @@ describe('server API (no model calls)', () => {
       expect(snapshot.body.workspace.mode).toBe('demo');
       expect(snapshot.body.sources.length).toBeGreaterThanOrEqual(5);
 
+      // Fixed Demo fixtures (design 3.3 / 17.3): plan, blocker, pending patch,
+      // accepted version, failure and validated recipe are all present.
+      expect(snapshot.body.snapshotSeq).toBeGreaterThanOrEqual(50);
+      expect(snapshot.body.events.length).toBeGreaterThan(0);
+      const runs = snapshot.body.runs as Array<{ state: string }>;
+      for (const state of ['COMPLETED', 'AWAITING_REVIEW', 'AWAITING_INPUT', 'FAILED']) {
+        expect(runs.some((run) => run.state === state)).toBe(true);
+      }
+      expect(snapshot.body.blockers.length).toBe(1);
+      expect(snapshot.body.blockers[0].resolutions.length).toBeGreaterThanOrEqual(2);
+      expect(snapshot.body.patches.length).toBeGreaterThanOrEqual(1);
+      const moduleStatuses = (snapshot.body.modules as Array<{ module: { status: string } }>).map((m) => m.module.status);
+      expect(moduleStatuses).toContain('accepted');
+      expect(moduleStatuses).toContain('ready_for_review');
+      expect((snapshot.body.recipes as Array<{ status: string }>).some((recipe) => recipe.status === 'validated')).toBe(true);
+      expect(snapshot.body.spatial.nodes.length).toBeGreaterThanOrEqual(8);
+      const prospects = snapshot.body.prospects as Array<{ state: string; missingInputs: string[] }>;
+      expect(prospects.length).toBeGreaterThanOrEqual(1);
+      expect(prospects.some((prospect) => prospect.state === 'missing_inputs')).toBe(true);
+
+      // Demo mode is read-only for new runs: creating one reports a clear state error.
+      const demoRun = await injectJson(harness, 'POST', `/api/tasks/${taskId}/runs`, {
+        commandId: uuid(),
+        expectedRevision: snapshot.body.task.revision,
+        moduleId: snapshot.body.modules[0].module.id,
+        intent: '演示模式不应执行真实模型',
+        planFirst: true,
+      });
+      expect(demoRun.status).toBe(409);
+      expect(demoRun.body.code).toBe('state_not_allowed');
+
       const back = await injectJson(harness, 'POST', '/api/workspace/mode', { commandId: uuid(), mode: 'live' });
       expect(back.status).toBe(200);
       expect(back.body.mode).toBe('live');

@@ -6,12 +6,13 @@
 
 | 项目 | 状态 |
 | - | - |
-| 适配器离线契约测试（模拟服务） | 见 `packages/providers/test`，覆盖流式、tool calling、错误映射、超时、usage 缺失、截断、拒绝、429 等 |
-| 真实服务端到端（Live） | **等待验证**——当前开发环境未提供可用模型凭据；未使用 Mock 补记通过 |
-| Anthropic 原生 / OpenAI Responses | 未实现（P1，界面明确禁用） |
+| 适配器离线契约测试（模拟服务） | ✅ 130 tests：覆盖流式、tool calling、错误映射、超时、usage 缺失、截断、拒绝、429、URL 策略、凭据掩码 |
+| 本地 OpenAI 兼容假服务 + 真实适配器 + 真实内核/工具/存储的端到端路径 | ✅ `tests/integration/live-adapter.test.ts`：保存连接 → 能力探测 → 规划 → 原生工具调用 → 校验 → 审阅 → 接受 |
+| 真实供应商服务端到端（Live） | **⚠️ 等待验证**——当前环境未提供真实模型凭据；未使用 Mock 补记通过 |
+| Anthropic 原生 / OpenAI Responses | 未实现（P1，界面明确禁用；`createAdapter` 返回 `unsupported_feature`，无静默回退） |
 | MCP 只读连接 | 未实现（P1） |
 
-> “OpenAI-compatible”仅是接口形状声明，不代表任何具体服务已被验证。真实兼容性以本文件更新后的实测记录为准。
+> “OpenAI-compatible”仅是接口形状声明，不代表任何具体服务已被验证。真实兼容性以 §5 更新后的实测记录为准。
 
 ## 2. 配置
 

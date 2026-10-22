@@ -17,8 +17,8 @@ import {
   type Artifact,
   type ArtifactModule,
   type Task,
-  type EventDraft,
 } from '@ca/contracts';
+import type { EventDraft } from '@ca/storage';
 import { applyTransformOperations, parseCsv, tableFromParsedCsv } from '@ca/tools';
 import { openStorage } from '@ca/storage';
 import { projectTaskSnapshot } from '../apps/server/src/projection';
@@ -36,7 +36,7 @@ async function benchCleaning(): Promise<void> {
   });
   const csvText = `${header}\n${rows.join('\n')}\n`;
   const start = performance.now();
-  const parsed = parseCsv(csvText, { sourceLabel: 'bench-1000' });
+  const parsed = parseCsv(csvText);
   const table = tableFromParsedCsv(parsed);
   const outcome = applyTransformOperations(table, [
     { op: 'normalize', column: 'status', transforms: ['trim', 'lower'], nullTokens: [] },
@@ -161,7 +161,7 @@ async function benchEventRecovery(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  console.log(`# Cognitive Atrium benchmark @ ${new Date().toISOString()} (${process.platform}/${process.arch}, ${process.version}, ${process.cpuModel ?? ''})`);
+  console.log(`# Cognitive Atrium benchmark @ ${new Date().toISOString()} (${process.platform}/${process.arch}, ${process.version})`);
   await benchCleaning();
   await benchEventRecovery();
 }

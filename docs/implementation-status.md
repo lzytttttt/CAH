@@ -1,64 +1,59 @@
-# 实施状态（跨会话工作记忆）
+# 实施状态（最终）
 
-> 本文件由 Lead 维护，记录当前阶段、工作流分工、已完成证据与已知缺口。恢复工作时先读本文件，再读设计文档与 `docs/traceability.md`。
+更新时间：2026-10-22（P0 实现完成；Live 实测与浏览器自动化走查为已知缺口）
 
-更新时间：2026-10-22（Phase 0 → Phase 1/2 进行中）
+## 总览
 
-## 当前阶段
+P0 已按设计文档实现为可运行的本地 harness（空间 Web 工作台 + CLI + 执行内核 + 持久化 + 配方 + 导出/导入）。所有并行工作流已完成并在集成层验证。
 
-- 目标：按《Cognitive Atrium 空间化 LLM Harness 完整设计与实施计划》完成 P0 交付（Phase 0 → Phase 7）。
-- 已完成：
-  - Phase 0 骨架：pnpm workspace、TypeScript strict、Vite/Tailwind/React 前端壳、Fastify 服务壳、esbuild 生产构建、vitest 测试、git 基线提交。
-  - `packages/contracts`：实体/事件（47 种事件，逐类型 payload Schema）/状态机/API/计划/补丁/配方/投影类型 + 纯函数（环检测、补丁应用、diff、事件校验）；26 个契约测试通过。
-  - 端口冻结：harness/storage/tools/providers/recipes 的接口与占位实现，保证并行开发可编译。
-  - 场景夹具：24 行存量系统数据（2 组重复主键、3 字段别名、2 异常枚举、1 缺失必填，已用 Node 实测核对）、约束冲突集、角色需求、新数据/非法数据、四模块模板。
-  - Phase 0 文档：`docs/architecture.md`、`docs/state-machines.md`、`docs/traceability.md`。
-- 进行中（并行工作流，每位 teammate 持有共享任务）：
-  | 工作流 | 任务 | 负责 | 验收 |
-  | - | - | - | - |
-  | providers | task-1 | providers-dev | `pnpm exec vitest run packages/providers` |
-  | tools | task-2 | tools-dev | `pnpm exec vitest run packages/tools` |
-  | storage | task-3 | storage-dev | `pnpm exec vitest run packages/storage` |
-  | harness | task-4 | harness-dev | `pnpm exec vitest run packages/harness` |
-  | web | task-5 | web-dev | `pnpm build:web` + `pnpm exec vitest run apps/web` |
-  | cli | task-6 | cli-dev | `pnpm exec vitest run apps/cli` + `pnpm build:cli` |
-  | server 集成 / 场景 / 文档 / 验收 | Lead | Lead | 见下 |
+## 验证结果（本次执行）
 
-## Lead 待办（按顺序）
+| 范围 | 结果 |
+| - | - |
+| `pnpm typecheck` | 0 错误 |
+| `pnpm test` | 69 files / 706 tests 全部通过 |
+| `pnpm build` | web + server + cli 成功 |
+| `pnpm exec tsx scripts/bench.ts` | 1000 行确定性清洗 5.4ms；5000 事件快照恢复 33.9ms（目标均 <2000ms） |
+| 生产冒烟 | 构建产物启动、会话/工作区/Demo 切换、Demo 夹具快照（57 events、10 节点）、前端静态托管、CLI 对同一服务读写一致 |
+| 详细矩阵 | 见 `docs/acceptance-report.md` |
 
-1. `apps/server`：会话/Origin/CSRF、命令 API（全部 18.1 路由）、SSE 续传、调度队列、事件投影（TaskSnapshot）、导出/导入（含 ZIP）、provider profile 与凭据状态、Demo 播种、双模式运行时（demo 只读）。
-2. `scripts/seed-demo.ts` + `scripts/demo.ts`：Demo 夹具事件、演示脚本。
-3. 集成测试：使用注入的 fake provider（本地 HTTP 假服务）跑通 plan→commit→tool→validate→review→accept→export→restore；SSE 续传；幂等；版本冲突；取消；恢复。
-4. Live 验证：检查环境是否有可用模型凭据；没有则写 `docs/provider-report.md` 明确"未完成 Live 验证"，不得用 Mock 补记。
-5. Phase 6/7：Playwright/浏览器级端到端（如可安装）、性能实测、Docker、README、.env 文档、验收报告、已知限制、LICENSE/依赖许可。
-6. 最终：`pnpm install && pnpm typecheck && pnpm test && pnpm build` 全绿；干净目录按 README 启动验证。
+## 已完成工作流
 
-## 关键决策记录
+| 工作流 | 交付 | 测试 |
+| - | - | - |
+| contracts | 版本化实体/事件（47 种逐类型 payload）/状态机/API/计划/补丁/配方/投影 + 纯函数 | 26 |
+| providers | OpenAI-compatible 适配器（流式、原生 tool calling、错误/超时/usage）、能力探测、凭据（env/受限文件/AES-GCM）、URL 策略 | 130 |
+| tools | 8 个 P0 工具、RFC4180 CSV/JSON、11 个确定性算子、权限/超时/大小限制、真实 SourceSpan 证据 | 156 |
+| storage | node:sqlite WAL、22 表迁移、事件 seq 原子分配、事务/回滚、commitAcceptance、租约+fencing、内容寻址对象、备份 | 71 |
+| harness | 计划（含确定性风险）、执行循环、工具回填、校验/修复、接受/拒绝/恢复/暂停/取消、上下文分层、恢复、验证器、版本化 prompts | 55 |
+| recipes | DSL 运行时、指纹/失效、真实夹具确定性清洗 24→22、非法输入拒绝、从运行轨迹提取 | 55 |
+| web | 五区/三层、机制 A–D、审阅/版本/设置/资料/导出/事件回放、键盘与减少动效、响应式、SSR 冒烟 | 99 |
+| cli | 20+ 命令、machine-readable 状态、退出码契约、SSE 续传、sha256 校验导出 | 97 |
+| server 集成 | 命令 API、会话/Origin/CSRF、SSE、调度队列、事件投影、导出/导入（ZIP）、Demo 固定夹具、Live 适配器真实路径 | 17 |
+| 文档/交付 | README、.env.example、架构/状态机/追踪矩阵、Provider/工具/配方/用户指南、验收报告、已知限制、Docker、演示脚本、LICENSE/依赖许可 | — |
 
-1. **存储使用 Node 内置 `node:sqlite`**（Node 22.20 实测可用；避免 better-sqlite3 原生编译，满足可复现安装）。SQLite WAL + 内容寻址对象目录不变。
-2. **工作区包以 TS 源码导出**（`exports: ./src/index.ts`），dev/test 用 tsx/vitest 直接加载；生产 server/cli 用 esbuild 打包工作区源码、外部化第三方依赖；web 用 Vite + tsconfig paths alias。
-3. **ArtifactVersion 为模块级不可变快照**；`Artifact.acceptedVersionId` 指向最近一次接受产生的版本；恢复旧版本创建新版本并触发下游 stale。
-4. **Demo 与 Live 物理分区**：`data/<mode>/` 各自 SQLite + objects；Demo 运行时使用只读/夹具策略，不调用真实模型；Live 失败不回退。
-5. **CLI 通过同一命令 API 调用内核**（HTTP），保证 AC-17 一致；CLI 不平行业务逻辑。
-6. **事件与状态同事务**：`storage.appendEvents` 与状态更新在同一 SQLite 事务；SSE 只推送已提交事件（轮询 tail + 心跳，P0 单进程足够）。
-7. **配方 P0 以 deterministic 清洗配方为主路径**；llm_assisted 配方 DSL 与失效规则必须实现，执行器可复用模型网关（若时间不足，界面上禁用并注明范围，不得假装可用）。
-8. **真实模型凭据**未知：Live 验收先完成离线契约测试，最终报告必须如实标注"等待 Live 验证"。
+## 关键决策（最终）
 
-## 已知风险
+1. 存储使用 Node 内置 `node:sqlite`（WAL + 内容寻址对象），无原生编译依赖，便于复现安装。
+2. 工作区包以 TS 源码导出；dev/test 用 tsx/vitest；生产 server/cli 用 esbuild 打包，第三方依赖保持 external；web 用 Vite。
+3. ArtifactVersion 为模块级不可变快照；接受在一个 SQLite 事务内完成（版本/模块/文档/任务修订 CAS/事件）；恢复产生内容相同的新版本。
+4. 客户端 `expectedRevision` 一律为 `Task.revision`；冲突返回 409 且双方保留。
+5. Demo 与 Live 物理隔离；Demo 为固定夹具只读演示（已接受/待审阅/计划阻塞/失败/validated 配方），不调用真实模型；Live 失败不回退。
+6. CLI 与 UI 仅通过同一命令 API 操作内核（AC-17）。
+7. 事件与状态同事务提交；SSE 只发已提交事件（120ms tail + 心跳 + Last-Event-ID 续传）。
+8. 配方 P0 主路径为 deterministic；`llm_assisted` 执行器在 P0 明确返回 `model_step_unavailable`（不伪装成功），DSL/指纹/失效已实现。
 
-- 六个并行工作流的接口偏差可能在集成时暴露；Lead 负责最终修正，contracts 由 Lead 独占修改。
-- 前端体量大，需在 Phase 3-6 内完成核心路径（中心/计划/修复/差异/配方/恢复），装饰性打磨优先级最低。
-- Windows 环境下文件编码：中文文件统一用 write/edit 工具写入 UTF-8，禁止用 PowerShell 文本改写（曾损坏 CSV）。
-- 性能数字（点击 p95、动画帧、5000 事件恢复、1000 行清洗）尚未测量，不得在文档/演示中宣称已达标。
+## 已知缺口（如实声明）
 
-## 验证命令
+1. **真实供应商 Live 实测未完成**（环境无凭据）。证据为本地 OpenAI 兼容假服务上的真实适配器路径。
+2. **浏览器级自动化/无障碍/性能测量未执行**（无 Playwright/jsdom 环境）；以 DOM-free 逻辑测试 + SSR 冒烟 + 人工代码审查替代。
+3. **真实进程 kill/restart 故障注入 E2E 未执行**；租约/检查点/恢复逻辑有单测。
+4. P1（Anthropic/Responses/MCP/图片/PDF/DOCX/语义检索）未实现并明确禁用；P2 团队能力不在首版。
+5. 未测量的性能项（点击 p95、动画帧、30 分钟内存）不宣称达标；已测量两项见验收报告。
+6. URL 策略不做 DNS 解析（DNS rebinding 需部署层 egress 策略）；`llm_assisted`/`cached_snapshot` 配方执行路径按上述限制禁用。
 
-```bash
-pnpm install          # 安装（锁文件固定）
-pnpm typecheck        # 全仓 TS 严格检查
-pnpm test             # vitest 全部
-pnpm build            # web + server + cli 生产构建
-pnpm dev              # 开发：Fastify(4310) + Vite(5173, /api 代理)
-pnpm seed:demo        # 播种 Demo 命名空间（不触碰 Live）
-pnpm cli -- --help    # CLI
-```
+## 后续建议
+
+1. 在有凭据环境执行 `docs/provider-integration.md` 的实测模板，更新验收报告 AC-01/AC-03。
+2. 安装 Playwright（或等价浏览器环境）补 AC-09 故障注入与 AC-19 浏览器级走查；对 1440×900/1366×768/1920×1080/390px 与 200% 缩放做截图验收。
+3. 需要多进程/公网部署时，先补充独立鉴权、任务隔离、HTTPS、限流与事件归档策略。

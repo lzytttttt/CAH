@@ -29,13 +29,11 @@ import {
   RecipeRunResultSchema,
   RecipeSchema,
   SourceIdSchema,
-  SourceSpanSchema,
   SourceSpanIdSchema,
   ModuleIdSchema,
   canonicalJson,
   recipeKindConsistencyErrors,
   recipeStepOrderErrors,
-  type ColumnProfile,
   type JsonObject,
   type JsonValue,
   type ModuleContent,
@@ -68,8 +66,6 @@ import {
   parseCsv,
   profileTableData,
   sha256Hex,
-  tableFromCsv,
-  tableFromJsonValue,
   tableToCsv,
   tableToJsonValue,
   truncateText,
@@ -93,14 +89,11 @@ import {
   coerceModuleContent,
   coerceTable,
   coerceTableFromText,
-  contentFromTableForKind,
   isModuleContent,
   isPlainRecord,
   isTableData,
-  markdownFromText,
   outputFromContent,
   parseContent,
-  previewOfContent,
   rowCountOfContent,
   serializeModuleContent,
 } from './content';
@@ -320,7 +313,7 @@ interface CompiledRecipe {
   errors: string[];
 }
 
-function compileRecipe(recipe: Recipe, options: RecipeRuntimeOptions): CompiledRecipe {
+function compileRecipe(recipe: Recipe, options: { promptHashes?: Record<string, string> }): CompiledRecipe {
   const errors: string[] = [];
   const parsed = RecipeSchema.safeParse(recipe);
   if (!parsed.success) {
@@ -381,9 +374,10 @@ function compileRecipe(recipe: Recipe, options: RecipeRuntimeOptions): CompiledR
     errors.push('llm_assisted recipe has no llm.step');
   }
   // Prompt pins must exist for every fixed prompt the workflow uses.
+  const promptHashes = options.promptHashes ?? {};
   for (const step of value.steps) {
     if (step.kind !== 'llm.step') continue;
-    const pinned = Object.keys(options.promptHashes).some(
+    const pinned = Object.keys(promptHashes).some(
       (key) =>
         key === step.promptTemplateId ||
         key.startsWith(`${step.promptTemplateId}@`) ||
@@ -412,6 +406,16 @@ function guardErrors(step: RecipeStep, paramNames: ReadonlySet<string>): string[
     errors.push(`step "${step.id}" guard operator "in" requires an array value`);
   }
   return errors;
+}
+
+/**
+ * Public DSL/registry compile check used by the recipe registry before
+ * registration (design 13.3). Returns human-readable errors; an empty array
+ * means the recipe is structurally executable (registration additionally needs
+ * the test cases to pass and the fingerprint pins to be current).
+ */
+export function recipeCompileErrors(recipe: Recipe, promptHashes: Record<string, string> = {}): string[] {
+  return compileRecipe(recipe, { promptHashes }).errors;
 }
 
 function hasModelStep(recipe: Recipe): boolean {
@@ -791,7 +795,7 @@ async function ensureSourceEntry(env: ExecutionEnvironment, ref: ResolvedSourceR
     try {
       items = await env.deps.sources.listSources(env.taskId);
     } catch (error) {
-      throw new RecipeRuntimeError('source_unavailable' as RecipeErrorCode, `could not list sources: ${errorMessage(error)}`);
+      throw new RecipeRuntimeError('step_failed', `could not list sources: ${errorMessage(error)}`, { retryable: true });
     }
     const item = items.find((candidate) => candidate.id === ref.sourceId);
     if (!item) {

@@ -4,7 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { RecipeSchema, RecipeStepSchema, type RecipeStep } from '@ca/contracts';
-import { createRecipeRuntime } from '../src';
+import { sha256Hex } from '@ca/tools';
+import { createRecipeRuntime, recipeCompileErrors } from '../src';
 import {
   BASE_PINS,
   CLEANING_OPERATIONS,
@@ -344,3 +345,19 @@ function cleaningStepsWithoutDedupe() {
   steps[2] = RecipeStepSchema.parse({ ...transform, operations });
   return steps;
 }
+
+describe('public compile check (registry precondition)', () => {
+  it('reports no errors for a valid recipe and concrete errors for a broken one', () => {
+    const valid = makeCleaningRecipe();
+    expect(recipeCompileErrors(valid)).toEqual([]);
+
+    const broken = RecipeSchema.parse({ ...valid, permissions: { ...valid.permissions, tools: [] } });
+    const brokenErrors = recipeCompileErrors(broken);
+    expect(brokenErrors.length).toBeGreaterThan(0);
+    expect(brokenErrors.join(' ')).toMatch(/needs tool permission/);
+
+    const llm = makeLlmAssistedRecipe();
+    expect(recipeCompileErrors(llm).join(' ')).toMatch(/no prompt hash is pinned/);
+    expect(recipeCompileErrors(llm, { 'executor.v1': sha256Hex('executor.v1 prompt') })).toEqual([]);
+  });
+});
