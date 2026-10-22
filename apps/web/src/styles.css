@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --ca-bg-base: #090a0f;
+  --ca-bg-elevated: #12151f;
+  --ca-text-primary: #e5e7eb;
+  --ca-text-secondary: #a7b0c0;
+  --ca-accent-anchor: #f59e0b;
+  --ca-status-accepted: #10b981;
+  --ca-status-pending: #f59e0b;
+  --ca-status-failed: #ef4444;
+  --ca-accent-prospect: #38bdf8;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: var(--ca-bg-base);
+  color: var(--ca-text-primary);
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}

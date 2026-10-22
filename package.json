@@ -1,0 +1,42 @@
+{
+  "name": "cognitive-atrium",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cognitive Atrium - spatialized LLM harness (P0 implementation)",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "dev": "tsx scripts/dev.ts",
+    "dev:server": "tsx watch apps/server/src/main.ts",
+    "dev:web": "vite --config apps/web/vite.config.ts",
+    "build": "pnpm run build:web && pnpm run build:server && pnpm run build:cli",
+    "build:web": "vite build --config apps/web/vite.config.ts",
+    "build:server": "tsx scripts/build.ts server",
+    "build:cli": "tsx scripts/build.ts cli",
+    "start": "node apps/server/dist/server.mjs",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "demo": "tsx scripts/demo.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
+    "cli": "tsx apps/cli/src/main.ts"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "@vitejs/plugin-react": "4.7.0",
+    "autoprefixer": "10.6.1",
+    "esbuild": "0.24.2",
+    "postcss": "8.5.31",
+    "tailwindcss": "3.4.19",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vite": "6.4.5",
+    "vitest": "2.1.9",
+    "zod": "4.6.7"
+  }
+}

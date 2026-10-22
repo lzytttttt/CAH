@@ -1,0 +1,14 @@
+{
+  "name": "@ca/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ca/contracts": "workspace:*",
+    "framer-motion": "11.18.2",
+    "lucide-react": "0.577.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zustand": "5.0.16"
+  }
+}

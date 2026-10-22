@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@ca/contracts": ["packages/contracts/src/index.ts"],
+      "@ca/harness": ["packages/harness/src/index.ts"],
+      "@ca/providers": ["packages/providers/src/index.ts"],
+      "@ca/tools": ["packages/tools/src/index.ts"],
+      "@ca/recipes": ["packages/recipes/src/index.ts"],
+      "@ca/storage": ["packages/storage/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/test/**/*.ts",
+    "apps/*/src/**/*.ts",
+    "apps/*/src/**/*.tsx",
+    "apps/*/test/**/*.ts",
+    "apps/web/*.config.ts",
+    "tests/**/*.ts",
+    "scripts/**/*.ts",
+    "vitest.config.ts"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@ca/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ca/contracts": "workspace:*",
+    "@ca/harness": "workspace:*",
+    "@ca/providers": "workspace:*",
+    "@ca/recipes": "workspace:*",
+    "@ca/storage": "workspace:*",
+    "@ca/tools": "workspace:*",
+    "fastify": "5.12.7",
+    "zod": "4.6.7"
+  }
+}

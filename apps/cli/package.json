@@ -1,0 +1,12 @@
+{
+  "name": "@ca/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "cognitive-atrium": "./src/main.ts"
+  },
+  "dependencies": {
+    "@ca/contracts": "workspace:*"
+  }
+}
