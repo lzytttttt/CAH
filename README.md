@@ -2,7 +2,7 @@
 
 以**中心交付物**为核心的本地单用户空间化 LLM harness：模型真实调用、受控工具执行、差异审阅、版本恢复、配方复用与事件回放。空间界面只是执行过程的可视化投影，所有业务状态来自后端运行时与持久化记录。
 
-> 设计依据：工作区根目录《Cognitive Atrium 空间化 LLM Harness 完整设计与实施计划》。
+> 设计依据：《Cognitive Atrium 空间化 LLM Harness 完整设计与实施计划》（内部设计文档，不随本仓库分发）。
 > 本文件是实施后的工程说明；P0 完成情况与验收证据见 [docs/acceptance-report.md](docs/acceptance-report.md)、[docs/implementation-status.md](docs/implementation-status.md)。
 
 ## 1. 能力边界（P0）

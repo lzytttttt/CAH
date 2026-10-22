@@ -1,6 +1,6 @@
 # 验收报告（P0）
 
-- 方案依据：《Cognitive Atrium 空间化 LLM Harness 完整设计与实施计划》（基线 2026-10-22）
+- 方案依据：《Cognitive Atrium 空间化 LLM Harness 完整设计与实施计划》（内部设计文档，不随本仓库分发；基线 2026-10-22）
 - 代码基线：本仓库当前提交；`pnpm-lock.yaml` 锁定依赖
 - 验收执行日期：2026-10-22
 - 执行环境：Windows 11 x64、Node.js v22.23.2、pnpm 11.25.0、SQLite 3.51.3（Node 内置）、浏览器未用于自动化测量

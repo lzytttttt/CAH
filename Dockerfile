@@ -7,7 +7,6 @@ COPY packages ./packages
 COPY apps ./apps
 COPY scripts ./scripts
 COPY scenarios ./scenarios
-COPY "Cognitive Atrium 空间化 LLM Harness 完整设计与实施计划.md" ./
 RUN pnpm install --frozen-lockfile
 RUN pnpm build
 
