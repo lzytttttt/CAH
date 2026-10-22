@@ -23,7 +23,7 @@ export const fail = {
   sessionRequired: (message = '需要本地会话令牌') => new ApiFailure('session_required', 401, message),
   forbidden: (message: string) => new ApiFailure('forbidden', 403, message),
   originNotAllowed: (origin: string) => new ApiFailure('origin_not_allowed', 403, `来源不被允许：${origin}`),
-  notFound: (what: string) => new ApiFailure('not_found', 404, `${what} 不存在`),
+  notFound: (what: string) => new ApiFailure('not_found', 404, `${what}不存在`),
   conflict: (message: string, details?: unknown) => new ApiFailure('conflict', 409, message, { details }),
   revisionConflict: (expected: number, actual: number) =>
     new ApiFailure('revision_conflict', 409, `修订号冲突：期望 ${expected}，当前 ${actual}`, { details: { expected, actual } }),

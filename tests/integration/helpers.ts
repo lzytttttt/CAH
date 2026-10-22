@@ -1,7 +1,6 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { FastifyInstance } from 'fastify';
 import { loadConfig, type ServerConfig } from '../../apps/server/src/config';
 import { RuntimeManager, type RuntimeOverrides } from '../../apps/server/src/runtime-manager';
 import { SessionManager } from '../../apps/server/src/session';
@@ -9,13 +8,15 @@ import { loadTemplateCatalog } from '../../apps/server/src/templates';
 import { createApp } from '../../apps/server/src/app';
 import { ScriptedProviderGateway } from './fakes/scripted-provider';
 
+type ServerApp = Awaited<ReturnType<typeof createApp>>;
+
 export const AUTH_SECRET = 'integration-test-session-secret-0123456789';
 
 export interface TestHarness {
   config: ServerConfig;
   manager: RuntimeManager;
   session: SessionManager;
-  app: FastifyInstance;
+  app: ServerApp;
   provider: ScriptedProviderGateway;
   headers: Record<string, string>;
   close(): Promise<void>;
@@ -24,6 +25,8 @@ export interface TestHarness {
 export interface CreateHarnessOptions {
   seedDemo?: boolean;
   provider?: ScriptedProviderGateway;
+  /** Use the real LiveProviderGateway (local fake HTTP provider) instead of a scripted gateway. */
+  useRealProviders?: boolean;
 }
 
 /** Boot the full server stack against a temp data dir with a scripted provider. */
@@ -44,14 +47,16 @@ export async function createHarness(options: CreateHarnessOptions = {}): Promise
     sessionTokenFile: path.join(dir, 'session-token'),
   };
   const provider = options.provider ?? new ScriptedProviderGateway();
-  const overrides: RuntimeOverrides = {
-    providersFor: (mode) => (mode === 'live' ? provider : null),
-  };
+  const overrides: RuntimeOverrides = options.useRealProviders
+    ? {}
+    : {
+        providersFor: (mode) => (mode === 'live' ? provider : null),
+      };
   const logs: string[] = [];
   const manager = new RuntimeManager(config, (message, details) => {
     logs.push(`${message} ${details ? JSON.stringify(details) : ''}`);
   }, overrides);
-  let app: FastifyInstance | null = null;
+  let app: ServerApp | null = null;
   try {
     await manager.init();
     const session = await SessionManager.create(config);
@@ -101,3 +106,4 @@ export async function waitFor<T>(
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 }
+

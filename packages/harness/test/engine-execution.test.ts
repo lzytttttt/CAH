@@ -298,6 +298,28 @@ describe('execution loop', () => {
     }
   }, 30_000);
 
+  it('never executes an incomplete tool call that never produced tool_call_complete', async () => {
+    const fixture = await createFixture({ modules: [{ title: '不完整调用模块', kind: 'markdown' }] });
+    try {
+      const ready = await planToReady(fixture);
+      // Partial streamed arguments only, then the stream ends: nothing may execute.
+      fixture.provider.enqueue([
+        { type: 'tool_call_delta', index: 0, callId: 'call_partial', name: 'artifact.propose_patch', argumentsDelta: '{"moduleId":' },
+        { type: 'finish', reason: 'tool_calls' },
+      ]);
+      fixture.provider.enqueueText(candidateEnvelope(CANDIDATE));
+      await commitRun(fixture, ready.runId);
+      await fixture.engine.waitForIdle();
+      expect(fixture.tools.calls).toHaveLength(0);
+      expect(fixture.eventTypes()).not.toContain('tool.started');
+      expect(fixture.eventTypes()).not.toContain('tool.succeeded');
+      const detail = await fixture.engine.getRunDetail(ready.runId as never);
+      expect(detail!.run.state).toBe('AWAITING_REVIEW');
+    } finally {
+      await fixture.close();
+    }
+  }, 30_000);
+
   it('fails with a committed state change when the planner output is valid but the model never produces a candidate', async () => {
     const fixture = await createFixture({
       modules: [{ title: '空输出模块', kind: 'markdown' }],

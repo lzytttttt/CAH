@@ -14,7 +14,6 @@ import {
   SourceSearchArgsSchema,
   TOOL_IDS,
   applyPatchOperations,
-  type ArtifactAccessPort,
   type ArtifactModule,
   type JsonObject,
   type JsonValue,
@@ -24,7 +23,6 @@ import {
   type SourceReadResult,
   type SourceSearchResult,
   type ToolCallId,
-  type ToolContext,
   type ToolDefinition,
   type ToolDescriptor,
   type ToolId,
@@ -32,7 +30,7 @@ import {
   type ToolScope,
   type TransformOperation,
 } from '@ca/contracts';
-import type { ToolRuntime, ValidatorPort, SourceReaderPort } from '@ca/tools';
+import type { ArtifactAccessPort, SourceReaderPort, ToolContext, ToolRuntime, ValidatorPort } from '@ca/tools';
 import type { StoragePort } from '@ca/storage';
 import { z } from 'zod';
 import { contentHash, sha256Hex } from '../../src/hashing';
@@ -144,6 +142,8 @@ export class FakeToolRuntime implements ToolRuntime {
         toolCallId: ctx.toolCallId,
         toolId,
         status: 'failed',
+        resultObjectHash: null,
+        resultBytes: 0,
         durationMs: 0,
         error: { code: 'invalid_arguments', message: validated.error, retryable: false },
         trust: 'untrusted_content',
@@ -160,6 +160,8 @@ export class FakeToolRuntime implements ToolRuntime {
         toolCallId: ctx.toolCallId,
         toolId,
         status: 'failed',
+        resultObjectHash: null,
+        resultBytes: 0,
         durationMs: 0,
         error: { code: 'tool_error', message: error instanceof Error ? error.message : String(error), retryable: false },
         trust: 'untrusted_content',
@@ -422,6 +424,8 @@ function failure(ctx: ToolContext, toolId: ToolId, code: string, message: string
     toolCallId: ctx.toolCallId,
     toolId,
     status: 'failed',
+    resultObjectHash: null,
+    resultBytes: 0,
     durationMs: 0,
     error: { code, message, retryable: false },
     trust: 'untrusted_content',

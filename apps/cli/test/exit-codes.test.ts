@@ -30,6 +30,22 @@ function tempDir(): string {
   return dir;
 }
 
+describe('exit-code mapping (pure)', () => {
+  it('classifies API error codes consistently', async () => {
+    const { exitCodeForApiError } = await import('../src/exit');
+    expect(exitCodeForApiError(401, 'session_required')).toBe(3);
+    expect(exitCodeForApiError(403, 'forbidden')).toBe(3);
+    expect(exitCodeForApiError(502, 'provider_error')).toBe(3);
+    expect(exitCodeForApiError(422, 'provider_auth_error')).toBe(3);
+    expect(exitCodeForApiError(409, 'revision_conflict')).toBe(4);
+    expect(exitCodeForApiError(409, 'version_conflict')).toBe(4);
+    expect(exitCodeForApiError(409, 'state_not_allowed')).toBe(4);
+    expect(exitCodeForApiError(422, 'validation_failed')).toBe(4);
+    expect(exitCodeForApiError(500, 'internal_error')).toBe(5);
+    expect(exitCodeForApiError(502, 'http_502')).toBe(5);
+  });
+});
+
 describe('exit-code contract', () => {
   it('maps 401 to exit 3 with auth diagnostics and still attempts the request when the token file is missing', async () => {
     const server = await makeServer((_request, response) => apiError(response, 401, 'session_required', '需要本地会话令牌'));

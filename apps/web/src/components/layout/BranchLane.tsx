@@ -82,10 +82,14 @@ export function BranchLane(props: BranchLaneProps): JSX.Element {
     const measure = (): void => {
       const rect = container.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
+      const escapeId = (id: string): string => {
+        if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(id);
+        return id.replace(/["\\]/g, '\\$&');
+      };
       const next: EdgePath[] = [];
       for (const edge of layout.visibleEdges) {
-        const fromEl = container.querySelector<HTMLElement>(`[data-node-id="${edge.from}"]`);
-        const toEl = container.querySelector<HTMLElement>(`[data-node-id="${edge.to}"]`);
+        const fromEl = container.querySelector<HTMLElement>(`[data-node-id="${escapeId(edge.from)}"]`);
+        const toEl = container.querySelector<HTMLElement>(`[data-node-id="${escapeId(edge.to)}"]`);
         if (!fromEl || !toEl) continue;
         const a = fromEl.getBoundingClientRect();
         const b = toEl.getBoundingClientRect();

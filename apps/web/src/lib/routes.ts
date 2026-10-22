@@ -19,7 +19,7 @@ export function parseHash(hash: string): Route {
   return { name: 'not-found', taskId: null, raw };
 }
 
-export function routeToHash(route: Pick<Route, 'name' | 'taskId'>): string {
+export function routeToHash(route: { name: RouteName; taskId?: string | null }): string {
   switch (route.name) {
     case 'tasks':
       return '#/tasks';
@@ -39,7 +39,7 @@ export function isTaskId(value: string | null): value is string {
   return value != null && /^[0-9a-fA-F-]{16,64}$/.test(value);
 }
 
-export function navigate(route: Pick<Route, 'name' | 'taskId'>): void {
+export function navigate(route: { name: RouteName; taskId?: string | null }): void {
   if (typeof window === 'undefined') return;
   const hash = routeToHash(route);
   if (window.location.hash !== hash) window.location.hash = hash;

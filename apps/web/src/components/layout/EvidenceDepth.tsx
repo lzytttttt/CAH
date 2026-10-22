@@ -20,6 +20,7 @@ import {
   validationStatusTone,
 } from '../../lib/labels';
 import type { ElevationLayer, EvidenceTab } from '../../state/viewStore';
+import { evidenceNodeId } from '../../lib/layout';
 import { Button, Card, Chip, EmptyState, StatusBadge, Tabs, TextInput, cn } from '../common/ui';
 
 const CHUNK = 20;
@@ -133,7 +134,15 @@ export function EvidenceDepth(props: EvidenceDepthProps): JSX.Element {
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       <StatusBadge label={`信任：${trustLevelLabel(source.trustLevel)}`} tone={trustLevelTone(source.trustLevel)} ariaLabel="资料信任级别" />
-                      <Button size="sm" variant="ghost" onClick={() => onFocusEntity(`node-source-${source.sourceId}`)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const nodeId = evidenceNodeId(snapshot.spatial, source.sourceId);
+                          if (nodeId) onFocusEntity(nodeId);
+                          else onOpenSourcesPanel();
+                        }}
+                      >
                         定位节点
                       </Button>
                       <Button

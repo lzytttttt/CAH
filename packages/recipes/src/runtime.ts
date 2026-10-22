@@ -1405,6 +1405,9 @@ async function executeStep(step: RecipeStep, env: ExecutionEnvironment, state: E
         duplicateRowCount: summary.duplicateRowCount,
         missingRequiredCount: summary.missingRequiredCount,
         issues: [...issues, ...summary.issues].slice(0, 100),
+        // Keep the parsed table so a downstream data.transform can bind
+        // previous_step without re-reading the source or inventing a format.
+        table: materialized.table,
       };
       return {
         value,
@@ -2112,6 +2115,12 @@ export function createRecipeRuntime(options: RecipeRuntimeOptions): RecipeRuntim
     testCases: RecipeTestCase[],
     inputsByCase: Record<string, JsonObject>,
   ): Promise<Recipe> {
+    if (!Array.isArray(testCases) || testCases.length === 0 || testCases.length > 16) {
+      throw new RecipeRuntimeError(
+        'invalid_input',
+        `validate() needs 1..16 test cases, received ${Array.isArray(testCases) ? testCases.length : 0}`,
+      );
+    }
     const compiled = compileRecipe(recipe, options);
     const base = compiled.recipe;
     const compileErrors = compiled.errors;

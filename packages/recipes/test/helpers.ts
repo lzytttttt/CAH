@@ -190,16 +190,30 @@ export class FakeObjectWriter implements ObjectWriterPort {
 }
 
 export class FakeArtifactAccess implements ArtifactAccessPort {
-  async getModule(): Promise<null> {
-    return null;
+  readonly modules = new Map<string, import('@ca/contracts').ArtifactModule>();
+  readonly versions = new Map<string, import('@ca/contracts').ArtifactVersion>();
+  readonly calls: string[] = [];
+
+  addVersion(artifactModule: import('@ca/contracts').ArtifactModule, version: import('@ca/contracts').ArtifactVersion): void {
+    this.modules.set(artifactModule.id, artifactModule);
+    this.versions.set(version.id, version);
   }
 
-  async getAcceptedVersion(): Promise<null> {
-    return null;
+  async getModule(moduleId: string): Promise<import('@ca/contracts').ArtifactModule | null> {
+    this.calls.push(`getModule:${moduleId}`);
+    return this.modules.get(moduleId) ?? null;
   }
 
-  async getVersion(): Promise<null> {
-    return null;
+  async getAcceptedVersion(moduleId: string): Promise<import('@ca/contracts').ArtifactVersion | null> {
+    this.calls.push(`getAcceptedVersion:${moduleId}`);
+    const artifactModule = this.modules.get(moduleId);
+    if (!artifactModule?.acceptedVersionId) return null;
+    return this.versions.get(artifactModule.acceptedVersionId) ?? null;
+  }
+
+  async getVersion(versionId: string): Promise<import('@ca/contracts').ArtifactVersion | null> {
+    this.calls.push(`getVersion:${versionId}`);
+    return this.versions.get(versionId) ?? null;
   }
 
   async saveProposal(): Promise<never> {
@@ -221,10 +235,15 @@ export class FakeRecipeCache {
   readonly entries = new Map<string, import('../src').RecipeCacheEntry>();
   gets = 0;
   puts = 0;
+  /** Deliberately corrupt/absent entry a test can force to prove no fake hits. */
+  forcedEntry: import('../src').RecipeCacheEntry | null = null;
+  /** When true every get() throws (the runtime must fall back to real execution). */
+  failGets = false;
 
   async get(key: string): Promise<import('../src').RecipeCacheEntry | null> {
     this.gets += 1;
-    return this.entries.get(key) ?? null;
+    if (this.failGets) throw new Error('cache unavailable');
+    return this.forcedEntry ?? this.entries.get(key) ?? null;
   }
 
   async put(key: string, entry: import('../src').RecipeCacheEntry): Promise<void> {

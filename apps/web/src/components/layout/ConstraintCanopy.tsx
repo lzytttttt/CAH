@@ -5,7 +5,7 @@
 import type { ModuleView, Plan, TaskSnapshot } from '@ca/contracts';
 import { ChevronDown, ChevronRight, Flag, Link2, SlidersHorizontal } from 'lucide-react';
 import { formatStepProgress, truncateText } from '../../lib/format';
-import { moduleStateLabel, moduleStateTone, planPhaseLabel } from '../../lib/labels';
+import { moduleStateLabel, moduleStateTone, planPhaseLabel, runStateLabel } from '../../lib/labels';
 import type { ElevationLayer } from '../../state/viewStore';
 import { Button, Chip, SectionHeading, StatusBadge, cn } from '../common/ui';
 
@@ -144,7 +144,7 @@ export function ConstraintCanopy({ snapshot, plan, modules, layer, open, onToggl
             <div className="mt-2 rounded border border-white/10 bg-black/20 px-2 py-1.5">
               <p className="text-[11px] text-ink-secondary">运行预算</p>
               <p className="break-words text-xs text-ink-primary">{control.budgetLabel}</p>
-              <p className="mt-0.5 text-[11px] text-ink-secondary">模型连接：{control.providerLabel} · 运行状态：{snapshot.activeRun ? snapshot.activeRun.state : '无活动运行'}</p>
+              <p className="mt-0.5 text-[11px] text-ink-secondary">模型连接：{control.providerLabel} · 运行状态：{snapshot.activeRun ? runStateLabel(snapshot.activeRun.state) : '无活动运行'}</p>
             </div>
           </div>
         </div>

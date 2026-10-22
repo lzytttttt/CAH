@@ -337,6 +337,11 @@ class HarnessEngineImpl implements HarnessEngine {
         return this.handleFor(cancelled, null);
       }
       case 'failed': {
+        await this.saveCommandResult(command.commandId, 'plan', command.taskId, {
+          runId: outcome.run.id,
+          state: outcome.run.state,
+          errorCode: outcome.error.code,
+        });
         return this.handleFor(outcome.run, null);
       }
     }
@@ -1420,6 +1425,17 @@ class HarnessEngineImpl implements HarnessEngine {
       const task = await this.runtime.loadTask(run.taskId);
       const module = await this.storage.getModule(run.moduleId);
       if (!module) throw kernelError('not_found', `模块不存在：${run.moduleId}`);
+      // Steps left 'running' by an interrupted process are reconciled honestly.
+      const orphanSteps = (await this.storage.listSteps(run.id)).filter((step) => step.status === 'running');
+      for (const step of orphanSteps) {
+        await this.storage.updateStep({
+          ...step,
+          status: 'failed',
+          summary: '进程中断时该步骤未完成',
+          errorJson: JSON.stringify({ code: 'step_interrupted', message: '进程中断时该步骤未完成，已在新 attempt 中重新执行', retryable: true }),
+          finishedAt: this.clock.now(),
+        });
+      }
       const plan = await this.planForRun(run.taskId, run.id);
       if (!plan) throw kernelError('state_not_allowed', '运行没有已提交的计划，无法执行。');
       if (mode === 'validation') {

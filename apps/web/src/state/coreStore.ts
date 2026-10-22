@@ -314,7 +314,6 @@ export class WorkbenchCore {
           lastSeq,
           staleRejected: merged.staleRejected ? true : this.state.staleRejected,
           resyncReason: merged.applied ? null : this.state.resyncReason,
-          lastError: null,
         });
       } catch (error) {
         if (this.disposed || this.state.taskId !== taskId) return;

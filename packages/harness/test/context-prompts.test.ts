@@ -52,7 +52,7 @@ describe('context builder', () => {
       const built = buildContext(input as never, {
         purpose: 'executor',
         clock: fixture.clock,
-        runId: uuid(),
+        runId: uuid() as never,
         policyVersion: 'p0-policy-1',
         promptBundleVersion: 'prompts-1',
         systemPrompt: 'SYSTEM-POLICY-TEXT',
@@ -61,9 +61,14 @@ describe('context builder', () => {
         sources: fixture.sources,
       });
       const snapshot: ContextSnapshot = built.snapshot;
-      expect(built.userPrompt).toContain('SYSTEM-POLICY-TEXT');
+      // P1 policy lives in the system message; it is recorded in the snapshot but
+      // not duplicated in the user message.
+      expect(built.userPrompt).not.toContain('SYSTEM-POLICY-TEXT');
+      const policyFragment = snapshot.fragments.find((fragment) => fragment.kind === 'system_policy');
+      expect(policyFragment!.included).toBe(true);
+      expect(policyFragment!.contentHash).toMatch(/^[0-9a-f]{64}$/);
       expect(built.userPrompt).toContain('INSTRUCTION-TEXT');
-      expect(built.userPrompt).toContain('## [P1]');
+      expect(built.userPrompt).toContain('## [P2]');
       const includedPriorities = snapshot.fragments.filter((fragment) => fragment.included).map((fragment) => fragment.priority);
       expect(includedPriorities).toContain(1);
       expect(includedPriorities).toContain(2);
@@ -113,7 +118,7 @@ describe('context builder', () => {
         {
           purpose: 'executor',
           clock: fixture.clock,
-          runId: uuid(),
+          runId: uuid() as never,
           policyVersion: 'p0-policy-1',
           promptBundleVersion: 'prompts-1',
           systemPrompt: 'SYS',

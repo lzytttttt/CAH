@@ -81,7 +81,9 @@ export function buildContext(input: ContextBuildInput, options: ContextBuildOpti
     const tokens = estimateTokens(content);
     used += tokens;
     fragments.push(fragmentOf(plan, content, true, plan.priority <= 2 ? '固定保留，不参与摘要与裁剪' : ''));
-    includedBlocks.push(renderBlock(plan, content));
+    // Priority-1 policy is already the system message; record it in the snapshot
+    // manifest but do not duplicate the text in the user message.
+    if (plan.priority > 1) includedBlocks.push(renderBlock(plan, content));
   }
   if (used > budget) {
     omitted.push({

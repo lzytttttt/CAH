@@ -79,6 +79,50 @@ describe('command guards and control semantics', () => {
     }
   }, 30_000);
 
+  it('cancels a run while planning and ends it as CANCELLED without a plan', async () => {
+    const fixture = await createFixture({ modules: [{ title: '规划取消模块', kind: 'markdown' }] });
+    try {
+      const moduleId = fixture.modules[0]!.id;
+      fixture.provider.enqueueHandler(async () => {
+        await sleep(30);
+        return [
+          { type: 'text_delta', text: JSON.stringify(validPlannerOutput({ moduleId: moduleId as string, moduleKind: 'markdown' })) },
+          { type: 'finish', reason: 'stop' },
+        ];
+      });
+      const planPromise = fixture.engine.plan({
+        commandId: uuid() as never,
+        taskId: fixture.task.id,
+        expectedRevision: await fixture.taskRevision(),
+        moduleId,
+        intent: fixture.task.intent,
+        planFirst: true,
+        actor: 'user',
+      });
+      await waitFor(async () => {
+        const runs = await fixture.storage.listRuns(fixture.task.id);
+        return runs.length === 1 && runs[0]!.state === 'PLANNING';
+      });
+      const running = (await fixture.storage.listRuns(fixture.task.id))[0]!;
+      await fixture.engine.cancel({
+        commandId: uuid() as never,
+        runId: running.id,
+        expectedRevision: await fixture.taskRevision(),
+        reason: '规划阶段取消',
+        actor: 'user',
+      });
+      const handle = await planPromise;
+      expect(handle.state).toBe('CANCELLED');
+      const run = await fixture.storage.getRun(running.id);
+      expect(run!.state).toBe('CANCELLED');
+      expect(fixture.eventTypes()).toContain('run.cancelled');
+      expect(fixture.finished).toHaveLength(1);
+      expect(handle.plan).toBeNull();
+    } finally {
+      await fixture.close();
+    }
+  }, 30_000);
+
   it('rejects illegal transitions: commit twice, pause a completed run, cancel a completed run', async () => {
     const fixture = await createFixture({ modules: [{ title: '非法转换模块', kind: 'markdown' }] });
     try {

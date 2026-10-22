@@ -9,7 +9,7 @@ import { failureGuidance, failureTitle } from '../api/errors';
 import { commandEnvelope } from '../lib/ids';
 import { formatStepProgress } from '../lib/format';
 import { planPhaseLabel, spatialStatusLabel } from '../lib/labels';
-import { buildSpatialLayout, focusRelatedModuleIds, pageForModule, spatialBranchId } from '../lib/layout';
+import { buildSpatialLayout, evidenceNodeId, focusRelatedModuleIds, pageForModule, spatialBranchId } from '../lib/layout';
 import { useCommandPending, useCore, useCoreState, useEffectiveReducedMotion, useFocusRestore, usePageVisible, useViewStore } from '../state/hooks';
 import { Button, ErrorNotice, LoadingBlock, StatusBadge } from '../components/common/ui';
 import { BranchLane } from '../components/layout/BranchLane';
@@ -360,7 +360,9 @@ export function WorkspaceScreen({ taskId, isFixture, onHome, onSettings }: Works
             onOpenVersions={(moduleId) => openPanel('versions', { moduleId })}
             onToggleIntentSource={view.toggleIntentSource}
             onFocusSpan={(span) => {
-              view.enterFocus(`node-source-${span.sourceId}`);
+              const nodeId = evidenceNodeId(snapshot.spatial, span.sourceId);
+              if (nodeId) view.enterFocus(nodeId);
+              else openPanel('sources');
               view.setEvidenceOpen(true);
             }}
             onFocusEntity={(entityId) => view.enterFocus(entityId)}

@@ -98,6 +98,8 @@ export function coerceTable(value: unknown, options: CoerceTableOptions): TableD
     if (isTableData(value.table)) return safeNormalizeTable(value.table);
     if (isModuleContent(value.content)) return safeTableFromModuleContent(value.content, issues);
     if (typeof value.text === 'string') return parseTextTable(value.text, options.format, issues);
+    // A step result (source.read) carries the raw text in `content`.
+    if (typeof value.content === 'string') return parseTextTable(value.content, options.format, issues);
   }
   if (typeof value === 'string') {
     return parseTextTable(value, options.format, issues);

@@ -172,6 +172,7 @@ export function exitCodeForApiError(status: number, code: string): ExitCode {
     case 'origin_not_allowed':
     case 'provider_auth_error':
     case 'provider_model_missing':
+    case 'provider_error':
       return EXIT.CONFIG;
     case 'internal_error':
       return EXIT.UNEXPECTED;
@@ -184,7 +185,6 @@ export function exitCodeForApiError(status: number, code: string): ExitCode {
     case 'budget_exhausted':
     case 'state_not_allowed':
     case 'dependency_unavailable':
-    case 'provider_error':
     case 'provider_rate_limited':
     case 'tool_error':
     case 'tool_timeout':

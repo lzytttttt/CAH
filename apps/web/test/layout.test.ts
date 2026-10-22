@@ -11,7 +11,7 @@ import {
   SPATIAL_LIMITS,
 } from '../src/lib/layout';
 
-function node(partial: Partial<SpatialNode> & Pick<SpatialNode, 'id' | 'kind'>): SpatialNode {
+function node(partial: Partial<Record<keyof SpatialNode, unknown>> & Pick<SpatialNode, 'id' | 'kind'>): SpatialNode {
   return {
     layer: 'execution',
     title: partial.id,
@@ -24,7 +24,7 @@ function node(partial: Partial<SpatialNode> & Pick<SpatialNode, 'id' | 'kind'>):
     badgeCount: null,
     laneHint: 0,
     ...partial,
-  } as SpatialNode;
+  } as unknown as SpatialNode;
 }
 
 function projection(nodes: SpatialNode[], edges: SpatialEdge[] = [], activeBranchId: string | null = null): SpatialProjection {

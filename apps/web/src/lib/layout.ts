@@ -341,6 +341,14 @@ function toNodeView(node: SpatialNode, related: ReadonlySet<string> | null): Spa
   };
 }
 
+/** Find the spatial evidence node that represents a source version (for focus jumps). */
+export function evidenceNodeId(spatial: SpatialProjection, sourceId: string): string | null {
+  const node = spatial.nodes.find(
+    (candidate) => (candidate.kind === 'source' || candidate.kind === 'span') && (candidate.refId === sourceId || candidate.id.includes(sourceId)),
+  );
+  return node?.id ?? null;
+}
+
 /** Spatial nodes related to a focused entity: itself, same module/run, edge neighbours. */
 export function focusRelatedNodeIds(spatial: SpatialProjection, focusId: string): Set<string> {
   const focusNode = spatial.nodes.find((node) => node.id === focusId) ?? null;

@@ -32,7 +32,7 @@ describe('deterministic artifact validator (L0-L4)', () => {
       const candidate = markdownCandidate([{ id: 's1', title: '第一节', markdown: '正文内容，可读。' }]);
       const report = await validator.validate({
         taskId: fixture.task.id,
-        runId: uuid(),
+        runId: uuid() as never,
         moduleId: fixture.modules[0]!.id,
         candidate,
         evidenceRefs: [],
@@ -46,7 +46,7 @@ describe('deterministic artifact validator (L0-L4)', () => {
       // Deterministic candidate hash across runs.
       const again = await validator.validate({
         taskId: fixture.task.id,
-        runId: uuid(),
+        runId: uuid() as never,
         moduleId: fixture.modules[0]!.id,
         candidate,
         evidenceRefs: [],
@@ -64,7 +64,7 @@ describe('deterministic artifact validator (L0-L4)', () => {
       const validator = createArtifactValidator({ storage: fixture.storage, clock: fixture.clock });
       const base = {
         taskId: fixture.task.id,
-        runId: uuid(),
+        runId: uuid() as never,
         moduleId: fixture.modules[0]!.id,
         evidenceRefs: [] as never[],
         baseVersion: null,
@@ -108,7 +108,7 @@ describe('deterministic artifact validator (L0-L4)', () => {
       const validator = createArtifactValidator({ storage: fixture.storage, clock: fixture.clock });
       const base = {
         taskId: fixture.task.id,
-        runId: uuid(),
+        runId: uuid() as never,
         moduleId: fixture.modules[0]!.id,
         evidenceRefs: [] as never[],
         baseVersion: null,
@@ -159,7 +159,7 @@ describe('deterministic artifact validator (L0-L4)', () => {
       const validator = createArtifactValidator({ storage: fixture.storage, clock: fixture.clock });
       const base = {
         taskId: fixture.task.id,
-        runId: uuid(),
+        runId: uuid() as never,
         moduleId: fixture.modules[0]!.id,
         evidenceRefs: [] as never[],
         baseVersion: null,
@@ -204,7 +204,7 @@ describe('deterministic artifact validator (L0-L4)', () => {
       const validator = createArtifactValidator({ storage: fixture.storage, clock: fixture.clock });
       const base = {
         taskId: fixture.task.id,
-        runId: uuid(),
+        runId: uuid() as never,
         evidenceRefs: [] as never[],
         baseVersion: null,
       };
@@ -233,7 +233,7 @@ describe('deterministic artifact validator (L0-L4)', () => {
       const validator = createArtifactValidator({ storage: fixture.storage, clock: fixture.clock });
       const base = {
         taskId: fixture.task.id,
-        runId: uuid(),
+        runId: uuid() as never,
         moduleId: fixture.modules[0]!.id,
         baseVersion: null,
       };
@@ -305,7 +305,7 @@ describe('deterministic artifact validator (L0-L4)', () => {
       const candidate = markdownCandidate([{ id: 's', title: 'S', markdown: '部署说明正文。' }]);
       const base = {
         taskId: fixture.task.id,
-        runId: uuid(),
+        runId: uuid() as never,
         moduleId: fixture.modules[0]!.id,
         candidate,
         evidenceRefs: [] as never[],
@@ -341,7 +341,7 @@ describe('deterministic artifact validator (L0-L4)', () => {
       const validator = createArtifactValidator({ storage: fixture.storage, clock: fixture.clock });
       const report = await validator.validate({
         taskId: fixture.task.id,
-        runId: uuid(),
+        runId: uuid() as never,
         moduleId: fixture.modules[0]!.id,
         candidate: markdownCandidate([{ id: 'x', title: 'X', markdown: '内容' }]),
         evidenceRefs: [],

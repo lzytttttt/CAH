@@ -17,6 +17,7 @@ import {
   TestProviderResponseSchema,
   DemoTemplateSchema,
   type HarnessEvent,
+  type JsonObject,
 } from '@ca/contracts';
 import { createFixtureClient } from '../src/api/fixture/client';
 import { buildFixtureBundle, FIXTURE_SCENARIOS, IDS, loadFixtureBundle } from '../src/api/fixture/data';
@@ -88,7 +89,7 @@ describe('fixture client commands keep the real command envelopes', () => {
       await client.createRun(IDS.task, {
         ...commandEnvelope(data.task.revision + 99),
         expectedRevision: data.task.revision + 99,
-        moduleId: IDS.modules.value,
+        moduleId: IDS.modules.value as never,
         intent: '生成价值矩阵',
         planFirst: true,
       });
@@ -106,7 +107,7 @@ describe('fixture client commands keep the real command envelopes', () => {
     const run = await emptyClient.createRun(IDS.task, {
       ...commandEnvelope(oldRevision),
       expectedRevision: oldRevision,
-      moduleId: IDS.modules.arch,
+      moduleId: IDS.modules.arch as never,
       intent: '生成架构拓扑',
       planFirst: true,
     });
@@ -119,7 +120,7 @@ describe('fixture client commands keep the real command envelopes', () => {
       ...commandEnvelope(withPlan.task.revision),
       expectedRevision: withPlan.task.revision,
       planVersion: withPlan.plan!.version,
-      contextSnapshotId: IDS.context.plan,
+      contextSnapshotId: IDS.context.plan as never,
     });
     expect(RunControlResponseSchema.safeParse(commit).success).toBe(true);
     expect(commit.state).toBe('AWAITING_REVIEW');
@@ -234,7 +235,7 @@ describe('fixture client sources / transfer / recipes / providers', () => {
 
   it('proposes, registers, validates and runs a deterministic recipe (0 LLM calls)', async () => {
     const data = await snapshot();
-    const completedRun = data.runs.find((run) => run.state === 'COMPLETED')!;
+    const completedRun = data.runs.find((run) => run.state === 'COMPLETED' && run.origin === 'recipe')!;
     const proposal = await client.proposeRecipe({
       ...commandEnvelope(),
       runId: completedRun.runId,
@@ -255,7 +256,7 @@ describe('fixture client sources / transfer / recipes / providers', () => {
     expect(validated.status).toBe('validated');
     const run = await client.runRecipe(created.recipeId, {
       ...commandEnvelope(),
-      inputs: created.recipe.inputParameters.reduce<Record<string, unknown>>((acc, parameter) => {
+      inputs: created.recipe.inputParameters.reduce<JsonObject>((acc, parameter) => {
         acc[parameter.name] = parameter.type === 'source' ? 'legacy-systems.csv' : 'x';
         return acc;
       }, {}),

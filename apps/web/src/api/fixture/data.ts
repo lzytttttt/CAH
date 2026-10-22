@@ -81,6 +81,7 @@ export const IDS = {
     cleanup: fixtureUuid(32),
     plan: fixtureUuid(33),
     synthesis: fixtureUuid(34),
+    cleanupRecipe: fixtureUuid(35),
   },
   steps: {
     planContext: fixtureUuid(40),
@@ -910,7 +911,8 @@ export function buildFixtureBundle(scenario: FixtureScenario): FixtureBundle {
   const runs = [
     { runId: IDS.runs.arch, moduleId: IDS.modules.arch, state: 'COMPLETED', origin: 'intent', attempt: 1, createdAt: at(8), updatedAt: at(14), activeStepTitle: null, errorSummary: null },
     { runId: IDS.runs.interaction, moduleId: IDS.modules.interaction, state: 'COMPLETED', origin: 'intent', attempt: 1, createdAt: at(16), updatedAt: at(30), activeStepTitle: null, errorSummary: null },
-    { runId: IDS.runs.cleanup, moduleId: IDS.modules.cleanup, state: 'INTERRUPTED', origin: 'recipe', attempt: 1, createdAt: at(20), updatedAt: at(28), activeStepTitle: '必填字段校验', errorSummary: '运行进程在记录工具结果后被中断；已保留检查点与草稿。' },
+    { runId: IDS.runs.cleanupRecipe, moduleId: IDS.modules.cleanup, state: 'COMPLETED', origin: 'recipe', attempt: 1, createdAt: at(6), updatedAt: at(9), activeStepTitle: null, errorSummary: null },
+    { runId: IDS.runs.cleanup, moduleId: IDS.modules.cleanup, state: 'INTERRUPTED', origin: 'recipe', attempt: 2, createdAt: at(20), updatedAt: at(28), activeStepTitle: '必填字段校验', errorSummary: '运行进程在记录工具结果后被中断；已保留检查点与草稿。' },
     { runId: IDS.runs.plan, moduleId: IDS.modules.interaction, state: 'AWAITING_INPUT', origin: 'intent', attempt: 1, createdAt: at(23), updatedAt: at(29), activeStepTitle: '确认部署口径与字段映射', errorSummary: null },
   ];
 
@@ -1228,8 +1230,8 @@ export function buildFixtureBundle(scenario: FixtureScenario): FixtureBundle {
   };
 
   const recipeProposals = {
-    [IDS.runs.cleanup]: RecipeProposalInputSchema.parse({
-      runId: IDS.runs.cleanup,
+    [IDS.runs.cleanupRecipe]: RecipeProposalInputSchema.parse({
+      runId: IDS.runs.cleanupRecipe,
       name: '存量系统清洗配方',
       description: '按 field-mapping 别名映射、枚举规范化、主键去重与必填校验的确定性清洗流程。',
       kind: 'deterministic',
@@ -1261,16 +1263,16 @@ export function buildFixtureBundle(scenario: FixtureScenario): FixtureBundle {
       kind: 'deterministic',
       status: 'validated',
       dslVersion: '1',
-      inputParameters: recipeProposals[IDS.runs.cleanup]!.inputParameters,
-      steps: recipeProposals[IDS.runs.cleanup]!.steps,
+      inputParameters: recipeProposals[IDS.runs.cleanupRecipe]!.inputParameters,
+      steps: recipeProposals[IDS.runs.cleanupRecipe]!.steps,
       outputArtifactKind: 'csv',
       validators: [{ id: 'required_fields', description: '必填字段与主键规则', supported: true }],
       permissions: { tools: ['source.read', 'data.transform', 'artifact.propose_patch'], scopes: ['sources:read', 'data:transform'], allowModelCalls: false, maxModelCallsPerRun: 0 },
       budget: { maxModelCalls: 0, maxToolCalls: 8, maxRuntimeMs: 60_000 },
-      testCases: recipeProposals[IDS.runs.cleanup]!.testCases,
+      testCases: recipeProposals[IDS.runs.cleanupRecipe]!.testCases,
       fingerprint: fixtureHash('recipe-cleanup-v2'),
       fingerprintInputs: { dslVersion: '1', stepFingerprint: fixtureHash('recipe-steps'), toolVersions: { 'data.transform': '1' }, promptHashes: {}, validatorVersion: 'validator-1', parserVersion: 'csv-1' },
-      sourceRunId: IDS.runs.cleanup as never,
+      sourceRunId: IDS.runs.cleanupRecipe as never,
       sourceTaskId: IDS.task as never,
       sourceModuleId: IDS.modules.cleanup as never,
       applicability: '适用于字段映射已知、主键为大小写敏感字符串的存量系统 CSV。',
@@ -1381,8 +1383,8 @@ function buildEvents(input: EventBuildInput): unknown[] {
     summary: '确定性校验全部通过（L0–L3）。',
   }, { runId: IDS.runs.interaction, minute: 29 });
   push('run.state_changed', { from: 'VALIDATING', to: 'AWAITING_REVIEW', reason: '候选通过确定性校验，等待人工接受' }, { runId: IDS.runs.interaction, minute: 30 });
-  push('recipe.proposed', { recipeId: IDS.recipes.cleanup, version: 2, kind: 'deterministic', name: '存量系统清洗配方' }, { runId: IDS.runs.cleanup, minute: 31 });
-  push('recipe.validated', { recipeId: IDS.recipes.cleanup, version: 2, fingerprint: fixtureHash('recipe-cleanup-v2'), testSummary: '3/3 测试通过（原始、新有效、非法输入）', testCases: 3 }, { runId: IDS.runs.cleanup, minute: 31 });
+  push('recipe.proposed', { recipeId: IDS.recipes.cleanup, version: 2, kind: 'deterministic', name: '存量系统清洗配方' }, { runId: IDS.runs.cleanupRecipe, minute: 31 });
+  push('recipe.validated', { recipeId: IDS.recipes.cleanup, version: 2, fingerprint: fixtureHash('recipe-cleanup-v2'), testSummary: '3/3 测试通过（原始、新有效、非法输入）', testCases: 3 }, { runId: IDS.runs.cleanupRecipe, minute: 31 });
   push('usage.updated', { modelRequests: 3, toolCalls: 2, inputTokens: 4120, outputTokens: 860, estimated: false, usdCost: null }, { runId: IDS.runs.plan, minute: 30 });
   push('artifact.stale', { artifactId: IDS.artifact, moduleId: IDS.modules.value, reason: '上游清洗结果尚未接受', staleRefs: [IDS.patches.cleanup] }, { runId: null, minute: 30 });
 

@@ -24,7 +24,6 @@ import {
   type PatchProposal,
   type ProviderCapabilities,
   type Run,
-  type RunDetail,
   type SourceItem,
   type Task,
   type ValidationReport,
@@ -34,7 +33,15 @@ import {
 import type { ToolContext } from '@ca/tools';
 import type { StoragePort } from '@ca/storage';
 import { createHarnessEngine } from '../src/engine';
-import { DEFAULT_HARNESS_CONFIG, systemClock, type Clock, type HarnessConfig, type HarnessEngine, type ToolContextFactoryInput } from '../src/types';
+import {
+  DEFAULT_HARNESS_CONFIG,
+  systemClock,
+  type Clock,
+  type HarnessConfig,
+  type HarnessEngine,
+  type RunDetail,
+  type ToolContextFactoryInput,
+} from '../src/types';
 import { contentHash, sha256Hex } from '../src/hashing';
 import { createArtifactValidator } from '../src/validator';
 import { FakeStorage, TestClock } from './fakes/fake-storage';
@@ -195,7 +202,10 @@ export async function createFixture(options: FixtureOptions = {}): Promise<Harne
   const toolContextFactory = async (input: ToolContextFactoryInput): Promise<ToolContext> => {
     const sourceReader: ToolContext['sources'] = {
       listSources: async (taskIdValue) => storage.listSources(taskIdValue),
-      getSource: async (taskIdValue, sourceId, version) => storage.getSource(taskIdValue, sourceId, version),
+      getSource: async (taskIdValue, sourceId, version) => {
+        const found = await storage.getSource(taskIdValue, sourceId, version);
+        return found ? { source: found.source, bytes: found.content } : null;
+      },
       listLatestContents: async (taskIdValue) => storage.listLatestSourceContents(taskIdValue),
       listSpans: async (taskIdValue, limit) => storage.listSpans(taskIdValue, limit),
       saveSpan: async (span) => storage.insertSpans([span]),
@@ -212,7 +222,7 @@ export async function createFixture(options: FixtureOptions = {}): Promise<Harne
           runId: proposalInput.runId,
           moduleId: proposalInput.moduleId,
           moduleKind: proposalInput.candidate.kind,
-          baseVersionId: proposalInput.baseVersionId,
+          baseVersionId: proposalInput.baseVersionId as never,
           operations: proposalInput.operations,
           evidenceRefs: proposalInput.evidenceRefs,
           validationReportId: proposalInput.validation?.id ?? null,

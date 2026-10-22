@@ -40,7 +40,6 @@ export function PanelHost({ snapshot, reducedMotion, onOpenEvidenceTab }: PanelH
   const onOpenVersions = (moduleId: string): void => openPanel('versions', { moduleId });
   const onOpenConstraints = (): void => openPanel('constraints');
   const onOpenRepair = (): void => openPanel('repair');
-  const onOpenPlan = (): void => openPanel('plan');
   const onFocusModule = (moduleId: string): void => {
     selectModule(moduleId);
     closePanel();
@@ -90,9 +89,7 @@ export function PanelHost({ snapshot, reducedMotion, onOpenEvidenceTab }: PanelH
             查看验证报告
           </button>
           {' · '}
-          <button type="button" className="ca-focus-ring min-h-8 rounded underline decoration-white/20 underline-offset-2" onClick={onOpenPlan}>
-            重新打开计划预览
-          </button>
+          <span>关闭计划预览不会提交或丢弃已保存的决策；意图草稿保存在本地视图中。</span>
         </p>
       )}
     </OverlayPanel>

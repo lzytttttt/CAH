@@ -8,18 +8,15 @@
 import {
   EVENT_CATEGORY_BY_TYPE,
   EVENT_SCHEMA_VERSION,
-  ModuleContentSchema,
   newEventId,
   parseEventPayload,
   type Artifact,
   type ArtifactModule,
   type ArtifactVersion,
   type Blocker,
-  type CommandMutexRecord,
   type ContextSnapshot,
   type Decision,
   type EngineMode,
-  type EventDraft,
   type EventType,
   type HarnessEvent,
   type PatchProposal,
@@ -811,4 +808,4 @@ export class FakeStorage implements StoragePort {
 }
 
 export { FakeStorageError };
-export type { EventDraft, CommandMutexRecord, ModuleContentSchema };
+export type { StorageEventDraft };
